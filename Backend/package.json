@@ -1,18 +1,24 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "Here is the backend for the official Venior clothing brand website",
+  "description": "Here is the backend for the official LURLUR clothing brand website",
   "keywords": [
-    "\"VENIOR\"",
+    "\"LURLUR\"",
     "\"CLOTH\"",
     "\"Backend\"",
     "\"javascript\""
   ],
   "license": "ISC",
   "author": "Ajay kumar kumawat",
-  "type": "commonjs",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongoose": "^9.6.3",
+    "nodemon": "^3.1.14"
   }
 }
