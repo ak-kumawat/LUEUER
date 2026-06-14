@@ -1,23 +1,25 @@
-import dotenv from "dotenv"
-dotenv.config({
-    path:'./env'
-})
-import connectDb from "./db/index.js";
-connectDb()
-.then(()=>{
-    app.on((error),()=>{
-                console.log("error :",error)
-                throw error
-            })
-    app.listen(process.env.PORT||8000,()=>{
-        console.log(`Server is running at port : ${process.env.PORT} `);
-        
-    })
-})
-.catch((err)=>{
-    console.log("MONGODB CONNECTION FAILURE !!",err);
-    
-})
+import dotenv from "dotenv";
+
+dotenv.config({ path: "./.env" });
+
+import app from "./app.js";
+import prisma from "./db/index.js"; // Prisma client singleton
+
+const PORT = process.env.PORT || 8000;
+
+async function startServer() {
+  try {
+    // Ensure the Prisma client can connect before starting the HTTP server
+    await prisma.$connect();
+    console.log("✅ Database connection established");
+    app.listen(PORT, () => console.log(`🚀 Server listening on ${PORT}`));
+  } catch (err) {
+    console.error("❌ DB connection failed:", err);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 
 

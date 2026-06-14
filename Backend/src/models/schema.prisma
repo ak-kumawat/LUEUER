@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+  // Client will be generated into src/generated/prisma
+  output   = "../generated/prisma"
+}
+
+// ---------------------------------------------------------------
+// Datasource – reads the connection string from .env (already set)
+// ---------------------------------------------------------------
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------
+// Data models – start with the ones you need today
+// ---------------------------------------------------------------
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // One‑to‑many relationship
+  products    Product[]
+}
+
+model Product {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
+  description String?
+  price       Decimal   @db.Decimal(10, 2)
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Optional foreign‑key to Category
+  category    Category? @relation(fields: [categoryId], references: [id])
+  categoryId  Int?
+}

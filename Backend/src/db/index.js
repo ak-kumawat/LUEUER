@@ -1,15 +1,15 @@
-import mongoose from "mongoose"
-import { Db_name } from "../constants.js"
+import { PrismaClient } from "../generated/prisma/index.js";
 
-const connectDb=async()=>{
-    try {
-        const connectionInstance = await mongoose.connect(`${process.env.MONGODB_URI}/${Db_name}`)
-        console.log(`\n mongodb connected !! DB HOST :${connectionInstance.connection.host}`)
-        //assignment see console.log detail clearly connectionInstance
+let prisma;
 
-    } catch (error) {
-        console.log("MONGODB connection error ",error)
-        process.exit(1)
-    }
+// In dev (nodemon) we want a single instance to avoid “multiple instances” warnings.
+if (process.env.NODE_ENV === "production") {
+  prisma = new PrismaClient();
+} else {
+  if (!global.__prisma__) {
+    global.__prisma__ = new PrismaClient();
+  }
+  prisma = global.__prisma__;
 }
-export default connectDb;
+
+export default prisma;
