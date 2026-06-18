@@ -1,23 +1,20 @@
-// src/routes/category.routes.js
-import { Router } from "express";
+import { Router } from 'express'
 import {
   getAllCategories,
-  getCategoryById,
+  getCategoryBySlug,
   createCategory,
   updateCategory,
-  deleteCategory,
-} from "../controllers/category.controller.js";
-import { adminOnly } from "../middlewares/adminOnly.js";
+  deleteCategory
+} from '../controllers/category.controller.js'
+import requireAuth from '../middlewares/requireAuth.js'
+import adminOnly from '../middlewares/adminOnly.js'
 
-const router = Router();
+const router = Router()
 
-// Public read endpoints
-router.get("/", getAllCategories);
-router.get("/:id", getCategoryById);
+router.get('/', getAllCategories)
+router.get('/:slug', getCategoryBySlug)
+router.post('/', requireAuth, adminOnly, createCategory)
+router.put('/:id', requireAuth, adminOnly, updateCategory)
+router.delete('/:id', requireAuth, adminOnly, deleteCategory)
 
-// Admin‑only mutating endpoints
-router.post("/", adminOnly, createCategory);
-router.put("/:id", adminOnly, updateCategory);
-router.delete("/:id", adminOnly, deleteCategory);
-
-export default router;
+export default router

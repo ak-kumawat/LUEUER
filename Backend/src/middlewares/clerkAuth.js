@@ -1,34 +1,57 @@
-import { clerkMiddleware, getAuth } from "@clerk/express"
+import { createClerkClient } from '@clerk/clerk-sdk-node'
 
-/**
- * Base Clerk middleware – validates JWT and puts `req.auth` on the request.
- */
-export const clerkAuth = clerkMiddleware();
+let clerkClient
 
-/**
- * Helper to protect routes.
- * - Rejects unauthenticated requests (401)
- * - Adds `req.userId` and `req.isAdmin` for downstream handlers.
- */
-export const requireAuth = (req, res, next) => {
-  const { userId, header } = getAuth(req);
-  if (!userId) {
-    return res.status(401).json({ success: false, message: "Unauthenticated" });
+const getClerkClient = () => {
+  if (!clerkClient) {
+    clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
   }
-  // Attach useful fields
-  req.userId = userId;
+  return clerkClient
+}
 
-  // ----‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑-
-  // *** ADMIN LOGIC ***
-  // Adjust this rule to match however you mark an admin in Clerk.
-  // Example: a custom claim `public.role === "admin"` stored in metadata.
-  const isAdmin = header?.claims?.metadata?.public?.role === "admin";
-  req.isAdmin = Boolean(isAdmin);
-  // ------------------------------------------------------------------------
-  next();
-};
+const clerkAuth = async (req, res, next) => {
+  try {
+    const sessionToken = req.cookies?.__session ||
+      req.headers.authorization?.replace('Bearer ', '')
 
-/**
- * Export raw Clerk helper for controllers that need the full token payload.
- */
-export { getAuth };
+    if (!sessionToken) {
+      req.user = null
+      req.isAdmin = false
+      return next()
+    }
+
+    const client = getClerkClient()
+
+    const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`
+    const clerkRequest = new Request(fullUrl, {
+      method: req.method,
+      headers: new Headers(req.headers)
+    })
+
+    const requestState = await client.authenticateRequest(clerkRequest, {
+      publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      secretKey: process.env.CLERK_SECRET_KEY
+    })
+
+    if (!requestState.isSignedIn) {
+      req.user = null
+      req.isAdmin = false
+      return next()
+    }
+
+    const user = await client.users.getUser(requestState.toAuth().userId)
+
+    req.user = user
+    req.isAdmin = user.publicMetadata?.role === 'admin'
+
+    next()
+
+  } catch (error) {
+    console.error("Clerk Auth Middleware Error:", error)
+    req.user = null
+    req.isAdmin = false
+    next()
+  }
+}
+
+export default clerkAuth

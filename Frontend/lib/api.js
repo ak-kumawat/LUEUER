@@ -1,0 +1,57 @@
+import axios from 'axios'
+
+const API = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  withCredentials: true
+})
+
+export const setAuthToken = (token) => {
+  if (token) {
+    API.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  } else {
+    delete API.defaults.headers.common['Authorization']
+  }
+}
+
+export const getCategories = () => API.get('/categories')
+export const getCategoryBySlug = (slug) => API.get(`/categories/${slug}`)
+
+export const getProducts = (params) => API.get('/products', { params })
+export const getFeaturedProducts = () => API.get('/products/featured')
+export const getProductBySlug = (slug) => API.get(`/products/${slug}`)
+
+export const getCart = () => API.get('/cart')
+export const addToCart = (data) => API.post('/cart/add', data)
+export const updateCartItem = (id, data) => API.put(`/cart/update/${id}`, data)
+export const removeFromCart = (id) => API.delete(`/cart/remove/${id}`)
+export const clearCart = () => API.delete('/cart/clear')
+
+export const getWishlist = () => API.get('/wishlist')
+export const addToWishlist = (data) => API.post('/wishlist/add', data)
+export const removeFromWishlist = (id) => API.delete(`/wishlist/remove/${id}`)
+
+export const getAddresses = () => API.get('/addresses')
+export const createAddress = (data) => API.post('/addresses', data)
+export const updateAddress = (id, data) => API.put(`/addresses/${id}`, data)
+export const deleteAddress = (id) => API.delete(`/addresses/${id}`)
+export const setDefaultAddress = (id) => API.put(`/addresses/${id}/default`)
+
+export const createRazorpayOrder = (data) => API.post('/orders/razorpay', data)
+export const placeOrder = (data) => API.post('/orders', data)
+export const getUserOrders = () => API.get('/orders')
+export const getOrderById = (id) => API.get(`/orders/${id}`)
+
+export const getRatingsByProduct = (productId) => API.get(`/ratings/product/${productId}`)
+export const addRating = (data) => API.post('/ratings', data)
+
+export const uploadImage = (formData) => API.post('/upload/image', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
+export const adminGetAllOrders = () => API.get('/orders/admin/all')
+export const adminUpdateOrderStatus = (id, data) => API.put(`/orders/admin/${id}/status`, data)
+export const adminCreateCategory = (data) => API.post('/categories', data)
+export const adminUpdateCategory = (id, data) => API.put(`/categories/${id}`, data)
+export const adminCreateProduct = (data) => API.post('/products', data)
+export const adminUpdateProduct = (id, data) => API.put(`/products/${id}`, data)
+export const adminAddProductImage = (id, data) => API.post(`/products/${id}/images`, data)

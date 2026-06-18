@@ -1,52 +1,48 @@
-import express from "express";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import { clerkAuth } from "./middlewares/clerkAuth.js";
-import helmet from "helmet";
-import compression from "compression";
-import rateLimit from "express-rate-limit";
-import apiRouter from "./routes/index.js";
+import express from 'express'
+import cors from 'cors'
+import cookieParser from 'cookie-parser'
+import helmet from 'helmet'
+import compression from 'compression'
+import rateLimit from 'express-rate-limit'
+import clerkAuth from './middlewares/clerkAuth.js'
+import apiRouter from './routes/index.js'
 
-const app = express();
+const app = express()
 
-// ------------------- Core middle‑wares -------------------
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN,
-    credentials: true,
-  })
-);
-app.use(express.json({ limit: "16kb" }));
-app.use(express.urlencoded({ extended: true, limit: "16kb" }));
-app.use(express.static("public"));
-app.use(cookieParser());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN,
+  credentials: true
+}))
 
-// ------------------- Security -------------------
-app.use(helmet());
-app.use(compression());
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 min
-    max: 100, // per IP
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+app.use(express.json({ limit: '16kb' }))
+app.use(express.urlencoded({ extended: true, limit: '16kb' }))
+app.use(express.static('public'))
+app.use(cookieParser())
+app.use(helmet())
+app.use(compression())
 
-// ------------------- Auth -------------------
-app.use(clerkAuth); // sets req.user & req.isAdmin
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false
+})
+app.use(limiter)
 
-// ------------------- API routes -------------------
-app.use("/api/v1", apiRouter);
+app.use(clerkAuth)
 
-// ------------------- Global error handler -------------------
-app.use((err, _req, res, _next) => {
-  console.error(err);
-  const status = err.status || 500;
-  res.status(status).json({
+app.use('/api/v1', apiRouter)
+
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500
+  const message = err.message || 'Internal Server Error'
+
+  return res.status(statusCode).json({
     success: false,
-    message: err.message || "Internal Server Error",
-  });
-});
+    statusCode,
+    message,
+    errors: err.errors || []
+  })
+})
 
-export default app;
+export default app

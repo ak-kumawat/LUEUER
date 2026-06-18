@@ -1,9 +1,12 @@
-export const adminOnly = (req, res, next) => {
+import ApiError from '../util/ApiError.js'
+
+const adminOnly = (req, res, next) => {
   if (!req.isAdmin) {
-    return res.status(403).json({
-      success: false,
-      message: "Forbidden – admin access required",
-    });
+    return res.status(403).json(
+      new ApiError(403, "Admin access required")
+    )
   }
-  next();
-};
+  next()
+}
+
+export default adminOnly
