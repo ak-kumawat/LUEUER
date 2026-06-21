@@ -5,6 +5,26 @@ const API = axios.create({
   withCredentials: true
 })
 
+let tokenFetcher = null
+
+export const setTokenFetcher = (fetcher) => {
+  tokenFetcher = fetcher
+}
+
+API.interceptors.request.use(async (config) => {
+  if (tokenFetcher) {
+    try {
+      const token = await tokenFetcher()
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`
+      }
+    } catch (err) {
+      console.error("Failed to fetch Clerk token dynamically:", err)
+    }
+  }
+  return config
+})
+
 export const setAuthToken = (token) => {
   if (token) {
     API.defaults.headers.common['Authorization'] = `Bearer ${token}`
@@ -54,4 +74,20 @@ export const adminCreateCategory = (data) => API.post('/categories', data)
 export const adminUpdateCategory = (id, data) => API.put(`/categories/${id}`, data)
 export const adminCreateProduct = (data) => API.post('/products', data)
 export const adminUpdateProduct = (id, data) => API.put(`/products/${id}`, data)
+export const adminDeleteProduct = (id) => API.delete(`/products/${id}`)
 export const adminAddProductImage = (id, data) => API.post(`/products/${id}/images`, data)
+
+// Shiprocket
+export const createShipment = (orderId) => API.post(`/shiprocket/create/${orderId}`)
+export const trackOrder = (orderId) => API.get(`/shiprocket/track/${orderId}`)
+export const cancelShipment = (orderId) => API.post(`/shiprocket/cancel/${orderId}`)
+export const checkServiceability = (data) => API.post('/shiprocket/serviceability', data)
+
+// Contact
+export const submitContactForm = (data) => API.post('/contact', data)
+
+// Cancel & Refund
+export const cancelOrder = (id) => API.post(`/orders/${id}/cancel`)
+export const adminMarkAsRefunded = (id) => API.put(`/orders/admin/${id}/refund`)
+
+

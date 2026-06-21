@@ -4,10 +4,14 @@ import ApiResponse from '../util/ApiResponse.js'
 import asyncHandler from '../util/asyncHandler.js'
 
 export const getAllProducts = asyncHandler(async (req, res) => {
-  const { category, featured, page = 1, limit = 12 } = req.query
+  const { category, featured, all, page = 1, limit = 12 } = req.query
   const skip = (parseInt(page) - 1) * parseInt(limit)
 
-  const where = { isActive: true }
+  const where = {}
+
+  if (all !== 'true') {
+    where.isActive = true
+  }
 
   if (featured === 'true') {
     where.isFeatured = true
@@ -27,7 +31,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
       skip,
       take: parseInt(limit),
       include: {
-        images: { where: { isPrimary: true } },
+        images: { orderBy: { displayOrder: 'asc' } },
         variants: { where: { isActive: true } },
         categories: { include: { category: true } },
         ratings: true
@@ -74,7 +78,7 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
     where: { isActive: true, isFeatured: true },
     take: 8,
     include: {
-      images: { where: { isPrimary: true } },
+      images: { orderBy: { displayOrder: 'asc' } },
       variants: { where: { isActive: true } },
       ratings: true
     }
@@ -87,8 +91,8 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
 
 export const createProduct = asyncHandler(async (req, res) => {
   const {
-    name, slug, description, basePrice,
-    thumbnailUrl, isFeatured, categoryIds, variants
+    name, slug, tagline, description, basePrice,
+    thumbnailUrl, isFeatured, defaultRating, categoryIds, variants, imageUrls
   } = req.body
 
   if (!name || !slug || !description || !basePrice) {
@@ -104,21 +108,30 @@ export const createProduct = asyncHandler(async (req, res) => {
     data: {
       name,
       slug,
+      tagline: tagline || null,
       description,
       basePrice: parseFloat(basePrice),
-      thumbnailUrl: thumbnailUrl || null,
+      thumbnailUrl: thumbnailUrl || (imageUrls && imageUrls.length > 0 ? imageUrls[0] : null),
       isFeatured: isFeatured || false,
+      defaultRating: defaultRating ? parseFloat(defaultRating) : 4.8,
       categories: categoryIds ? {
         create: categoryIds.map(categoryId => ({ categoryId }))
       } : undefined,
       variants: variants ? {
         create: variants.map(v => ({
           size: v.size,
-          color: v.color,
-          colorHex: v.colorHex,
-          stockQuantity: v.stockQuantity || 0,
+          color: v.color || "Carbon Black",
+          colorHex: v.colorHex || "#121212",
+          stockQuantity: parseInt(v.stockQuantity) || 0,
           priceOverride: v.priceOverride ? parseFloat(v.priceOverride) : null,
-          sku: v.sku
+          sku: v.sku || `LUR-${slug.toUpperCase()}-${v.size.toUpperCase()}`
+        }))
+      } : undefined,
+      images: imageUrls ? {
+        create: imageUrls.map((url, idx) => ({
+          imageUrl: url,
+          isPrimary: idx === 0,
+          displayOrder: idx
         }))
       } : undefined
     },
@@ -137,13 +150,64 @@ export const createProduct = asyncHandler(async (req, res) => {
 export const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params
   const {
-    name, slug, description, basePrice,
-    thumbnailUrl, isFeatured, isActive
+    name, slug, tagline, description, basePrice,
+    thumbnailUrl, isFeatured, defaultRating, isActive, variants
   } = req.body
 
-  const product = await prisma.product.findUnique({ where: { id } })
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: { variants: true }
+  })
   if (!product) {
     throw new ApiError(404, "Product not found")
+  }
+
+  // Update variants if provided
+  if (variants && variants.length > 0) {
+    // Keep track of incoming variant IDs to know which ones should remain active
+    const activeIncomingIds = variants.map(v => v.id).filter(Boolean)
+
+    // Deactivate variants not in the incoming payload
+    await prisma.productVariant.updateMany({
+      where: {
+        productId: id,
+        id: { notIn: activeIncomingIds }
+      },
+      data: { isActive: false }
+    })
+
+    // Upsert each incoming variant
+    for (const v of variants) {
+      if (v.id) {
+        // Update existing variant
+        await prisma.productVariant.update({
+          where: { id: v.id },
+          data: {
+            size: v.size || undefined,
+            color: v.color || undefined,
+            colorHex: v.colorHex || undefined,
+            stockQuantity: v.stockQuantity !== undefined ? parseInt(v.stockQuantity) : undefined,
+            priceOverride: v.priceOverride !== undefined ? (v.priceOverride ? parseFloat(v.priceOverride) : null) : undefined,
+            sku: v.sku || undefined,
+            isActive: v.isActive !== undefined ? v.isActive : true
+          }
+        })
+      } else {
+        // Create new variant
+        await prisma.productVariant.create({
+          data: {
+            productId: id,
+            size: v.size || "M",
+            color: v.color || "Carbon Black",
+            colorHex: v.colorHex || "#121212",
+            stockQuantity: parseInt(v.stockQuantity) || 0,
+            priceOverride: v.priceOverride ? parseFloat(v.priceOverride) : null,
+            sku: v.sku || `LUR-${(slug || product.slug).toUpperCase()}-${(v.size || "M").toUpperCase()}-${Date.now()}`,
+            isActive: true
+          }
+        })
+      }
+    }
   }
 
   const updated = await prisma.product.update({
@@ -151,10 +215,12 @@ export const updateProduct = asyncHandler(async (req, res) => {
     data: {
       name: name || product.name,
       slug: slug || product.slug,
+      tagline: tagline !== undefined ? tagline : product.tagline,
       description: description || product.description,
       basePrice: basePrice ? parseFloat(basePrice) : product.basePrice,
       thumbnailUrl: thumbnailUrl !== undefined ? thumbnailUrl : product.thumbnailUrl,
       isFeatured: isFeatured !== undefined ? isFeatured : product.isFeatured,
+      defaultRating: defaultRating !== undefined ? parseFloat(defaultRating) : product.defaultRating,
       isActive: isActive !== undefined ? isActive : product.isActive
     },
     include: {

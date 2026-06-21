@@ -2,53 +2,138 @@
 
 import Link from 'next/link'
 import { UserButton, useAuth } from '@clerk/nextjs'
-import { useEffect } from 'react'
-import { setAuthToken } from '../../lib/api'
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { setAuthToken, setTokenFetcher } from '../../lib/api'
 
 export default function AdminLayout({ children }) {
-
-  
   const { getToken, isLoaded, isSignedIn } = useAuth()
+  const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   
   useEffect(() => {
     const fetchToken = async () => {
       if (isLoaded && isSignedIn) {
         const token = await getToken()
         setAuthToken(token)
+        setTokenFetcher(getToken)
       } else if (isLoaded && !isSignedIn) {
         setAuthToken(null)
+        setTokenFetcher(null)
       }
     }
     fetchToken()
   }, [isLoaded, isSignedIn, getToken])
 
+  const isActive = (path) => pathname === path
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#050505', color: '#fff' }}>
+    <div className="admin-layout-wrapper">
+      {/* Mobile Top Header */}
+      <div className="admin-mobile-header">
+        <button className="admin-menu-toggle" onClick={() => setSidebarOpen(true)}>
+          <svg viewBox="0 0 24 24">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <Link href="/admin" className="admin-mobile-brand">
+          LUEUER ADMIN
+        </Link>
+        <UserButton afterSignOutUrl="/" />
+      </div>
+
+      {/* Sidebar Overlay Backdrop */}
+      <div 
+        className={`admin-sidebar-overlay ${sidebarOpen ? 'show' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
-      <aside style={{ width: '250px', borderRight: '1px solid #222', padding: '30px' }}>
-        <h2 style={{ marginBottom: '40px', fontSize: '22px', letterSpacing: '3px' }}>LUEUER ADMIN</h2>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <Link href="/admin" style={{ color: '#aaa', textDecoration: 'none', transition: 'color 0.3s' }} onMouseOver={(e) => e.target.style.color = '#fff'} onMouseOut={(e) => e.target.style.color = '#aaa'}>Dashboard</Link>
-          <Link href="/admin/categories" style={{ color: '#aaa', textDecoration: 'none', transition: 'color 0.3s' }} onMouseOver={(e) => e.target.style.color = '#fff'} onMouseOut={(e) => e.target.style.color = '#aaa'}>Categories</Link>
-          <Link href="/admin/products" style={{ color: '#aaa', textDecoration: 'none', transition: 'color 0.3s' }} onMouseOver={(e) => e.target.style.color = '#fff'} onMouseOut={(e) => e.target.style.color = '#aaa'}>Products</Link>
-          <Link href="/admin/orders" style={{ color: '#aaa', textDecoration: 'none', transition: 'color 0.3s' }} onMouseOver={(e) => e.target.style.color = '#fff'} onMouseOut={(e) => e.target.style.color = '#aaa'}>Orders</Link>
-          <Link href="/admin/brand" style={{ color: '#aaa', textDecoration: 'none', transition: 'color 0.3s' }} onMouseOver={(e) => e.target.style.color = '#fff'} onMouseOut={(e) => e.target.style.color = '#aaa'}>Brand Assets</Link>
-          
-          <div style={{ marginTop: 'auto', paddingTop: '40px' }}>
-            <Link href="/" style={{ color: '#555', textDecoration: 'none' }}>â†  Back to Store</Link>
-          </div>
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+          <h2 className="admin-sidebar-logo" style={{ marginBottom: 0 }}>LUEUER ADMIN</h2>
+          {/* Close button inside sidebar on mobile */}
+          <button 
+            className="admin-menu-toggle admin-menu-close-btn" 
+            onClick={() => setSidebarOpen(false)}
+            style={{ padding: 4 }}
+          >
+            <svg viewBox="0 0 24 24" style={{ width: 20, height: 20, stroke: '#888' }}>
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <nav className="admin-sidebar-nav">
+          <Link 
+            href="/admin" 
+            className={`admin-sidebar-link ${isActive('/admin') ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Dashboard
+          </Link>
+          <Link 
+            href="/admin/categories" 
+            className={`admin-sidebar-link ${isActive('/admin/categories') ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Categories
+          </Link>
+          <Link 
+            href="/admin/products" 
+            className={`admin-sidebar-link ${isActive('/admin/products') ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Products
+          </Link>
+          <Link 
+            href="/admin/orders" 
+            className={`admin-sidebar-link ${isActive('/admin/orders') ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Orders
+          </Link>
+          <Link 
+            href="/admin/brand" 
+            className={`admin-sidebar-link ${isActive('/admin/brand') ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Brand Assets
+          </Link>
         </nav>
+        
+        <div className="admin-sidebar-footer">
+          <Link href="/" className="admin-sidebar-backlink">
+            ← Back to Store
+          </Link>
+        </div>
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <header style={{ display: 'flex', justifyContent: 'flex-end', padding: '20px 40px', borderBottom: '1px solid #111' }}>
+      <main className="admin-content-area">
+        <header className="admin-header">
           <UserButton afterSignOutUrl="/" />
         </header>
-        <div style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+        <div className="admin-container">
           {children}
         </div>
       </main>
+
+      <style jsx global>{`
+        @media (min-width: 1025px) {
+          .admin-menu-close-btn {
+            display: none !important;
+          }
+        }
+        @media (max-width: 1024px) {
+          .admin-menu-close-btn {
+            display: flex !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

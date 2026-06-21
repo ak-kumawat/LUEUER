@@ -53,8 +53,6 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   if (!variant) throw new ApiError(404, "Variant not found")
   if (!variant.isActive) throw new ApiError(400, "This variant is not available")
-  if (variant.stockQuantity < quantity) throw new ApiError(400, "Insufficient stock")
-
   let cart = await prisma.cart.findUnique({ where: { userId: dbUser.id } })
   if (!cart) {
     cart = await prisma.cart.create({ data: { userId: dbUser.id } })
@@ -63,6 +61,11 @@ export const addToCart = asyncHandler(async (req, res) => {
   const existingItem = await prisma.cartItem.findFirst({
     where: { cartId: cart.id, variantId }
   })
+
+  const totalQuantityNeeded = (existingItem?.quantity || 0) + quantity
+  if (variant.stockQuantity < totalQuantityNeeded) {
+    throw new ApiError(400, `Insufficient stock. Only ${variant.stockQuantity} items available in total.`)
+  }
 
   let cartItem
   if (existingItem) {
@@ -87,13 +90,24 @@ export const updateCartItem = asyncHandler(async (req, res) => {
 
   if (!quantity || quantity < 1) throw new ApiError(400, "Valid quantity required")
 
-  const cartItem = await prisma.cartItem.update({
+  const cartItem = await prisma.cartItem.findUnique({
+    where: { id },
+    include: { variant: true }
+  })
+
+  if (!cartItem) throw new ApiError(404, "Cart item not found")
+
+  if (cartItem.variant.stockQuantity < quantity) {
+    throw new ApiError(400, `Insufficient stock. Only ${cartItem.variant.stockQuantity} items available.`)
+  }
+
+  const updatedItem = await prisma.cartItem.update({
     where: { id },
     data: { quantity }
   })
 
   return res.status(200).json(
-    new ApiResponse(200, cartItem, "Cart updated")
+    new ApiResponse(200, updatedItem, "Cart updated")
   )
 })
 

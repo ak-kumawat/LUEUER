@@ -1,53 +1,139 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getProducts, adminCreateProduct, uploadImage } from '../../../../lib/api'
+import { getProducts, adminCreateProduct, uploadImage, getCategories, adminUpdateProduct, adminDeleteProduct } from '../../../../lib/api'
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [uploading, setUploading] = useState(false)
-  
-  // Notice we now match the backend schema exactly (basePrice, description, thumbnailUrl)
-  const [form, setForm] = useState({ 
-    name: '', slug: '', description: '', basePrice: 0, stock: 0, thumbnailUrl: '' 
-  })
 
-  useEffect(() => { fetchProducts() }, [])
+  // New advanced form states
+  const [form, setForm] = useState({ 
+    name: '', slug: '', description: '', basePrice: 0, sku: ''
+  })
+  const [tagline, setTagline] = useState('')
+  const [defaultRating, setDefaultRating] = useState(4.8)
+  const [imagesList, setImagesList] = useState([])
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([])
+  
+  // Single Variant States
+  const [size, setSize] = useState('M')
+  const [color, setColor] = useState('Carbon Black')
+  const [colorHex, setColorHex] = useState('#121212')
+  const [stockQuantity, setStockQuantity] = useState(0)
+
+  useEffect(() => {
+    fetchProducts()
+    fetchCategories()
+  }, [])
 
   const fetchProducts = async () => {
     try {
-      const res = await getProducts()
+      const res = await getProducts({ all: true })
       setProducts(res.data?.data?.products || [])
     } catch (err) {}
   }
 
-  // Handle Image Upload to Cloudinary via your Backend
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    setUploading(true)
-    const formData = new FormData()
-    formData.append('image', file)
-
+  const fetchCategories = async () => {
     try {
-      const res = await uploadImage(formData)
-      // Save the secure Cloudinary URL to the form
-      setForm({ ...form, thumbnailUrl: res.data.data.url })
+      const res = await getCategories()
+      setCategories(res.data?.data || [])
+    } catch (err) {}
+  }
+
+  const handleToggleActive = async (product) => {
+    try {
+      await adminUpdateProduct(product.id, { isActive: !product.isActive })
+      fetchProducts()
     } catch (err) {
-      alert("Image upload failed. Have you added your Cloudinary keys to the Backend .env?")
-    } finally {
-      setUploading(false)
+      alert(err?.response?.data?.message || "Failed to update product status")
     }
   }
 
-  const handleSubmit = async () => {
+  const handleDeleteProduct = async (productId) => {
+    if (!confirm("Are you sure you want to delete this product?")) return
     try {
-      await adminCreateProduct(form)
+      await adminDeleteProduct(productId)
+      fetchProducts()
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to delete product")
+    }
+  }
+
+  // Handle uploading multiple image files to Cloudinary sequentially
+  const handleMultipleImageUpload = async (e) => {
+    const files = Array.from(e.target.files)
+    if (files.length === 0) return
+
+    if (imagesList.length + files.length > 7) {
+      alert(`Upload rejected. Adding ${files.length} more images would exceed the maximum limit of 7 images (currently uploaded: ${imagesList.length}).`)
+      return
+    }
+
+    setUploading(true)
+    const uploadedUrls = []
+
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('image', file)
+      try {
+        const res = await uploadImage(formData)
+        uploadedUrls.push(res.data.data.url)
+      } catch (err) {
+        alert(`Failed to upload image: ${file.name}`)
+      }
+    }
+
+    setImagesList(prev => [...prev, ...uploadedUrls])
+    setUploading(false)
+  }
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.slug || !form.description || !form.basePrice) {
+      alert("Name, slug, description and base price are required")
+      return
+    }
+
+    if (!size) {
+      alert("Please select a size")
+      return
+    }
+
+    const payload = {
+      name: form.name,
+      slug: form.slug,
+      description: form.description,
+      tagline: tagline || undefined,
+      basePrice: parseFloat(form.basePrice),
+      defaultRating: parseFloat(defaultRating) || 4.8,
+      categoryIds: selectedCategoryIds,
+      variants: [{
+        size,
+        color: color || "Carbon Black",
+        colorHex: colorHex || "#121212",
+        stockQuantity: parseInt(stockQuantity) || 0,
+        sku: form.sku || undefined
+      }],
+      imageUrls: imagesList
+    }
+
+    try {
+      await adminCreateProduct(payload)
       setShowForm(false)
       fetchProducts()
-      setForm({ name: '', slug: '', description: '', basePrice: 0, stock: 0, thumbnailUrl: '' })
+      
+      // Reset form states
+      setForm({ name: '', slug: '', description: '', basePrice: 0, sku: '' })
+      setTagline('')
+      setDefaultRating(4.8)
+      setImagesList([])
+      setSelectedCategoryIds([])
+      setSize('M')
+      setColor('Carbon Black')
+      setColorHex('#121212')
+      setStockQuantity(0)
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to add product")
     }
@@ -55,66 +141,288 @@ export default function AdminProductsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '32px', letterSpacing: '1px' }}>Products</h1>
-        <button className="btn-primary" style={{ padding: '10px 20px' }} onClick={() => setShowForm(!showForm)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px', marginBottom: '40px' }}>
+        <div>
+          <h1 className="admin-page-title">Products</h1>
+          <p className="admin-page-subtitle">Manage LUEUER inventory items, variants, and media.</p>
+        </div>
+        <button className="admin-btn-primary" onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ Add Product'}
         </button>
       </div>
 
       {showForm && (
-        <div style={{ border: '1px solid #222', padding: '30px', marginBottom: '30px', background: '#0a0a0a', borderRadius: '4px' }}>
-          <h3 style={{ marginBottom: '20px', color: '#888' }}>New Product</h3>
+        <div className="admin-card" style={{ marginBottom: '40px' }}>
+          <h3 style={{ marginBottom: '24px', fontFamily: 'var(--font-sans)', fontSize: '15px', fontWeight: 600, color: 'var(--admin-accent)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>New Product</h3>
           
-          <input placeholder="Product Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} style={{ display: 'block', marginBottom: '15px', width: '100%', padding: '12px', background: '#111', border: '1px solid #333', color: '#fff' }} />
-          <input placeholder="URL Slug (e.g. vintage-tee)" value={form.slug} onChange={e => setForm({...form, slug: e.target.value})} style={{ display: 'block', marginBottom: '15px', width: '100%', padding: '12px', background: '#111', border: '1px solid #333', color: '#fff' }} />
-          
-          {/* New Description Field */}
-          <textarea placeholder="Product Description..." rows="4" value={form.description} onChange={e => setForm({...form, description: e.target.value})} style={{ display: 'block', marginBottom: '15px', width: '100%', padding: '12px', background: '#111', border: '1px solid #333', color: '#fff', resize: 'vertical' }} />
+          <div className="admin-form-group">
+            <label className="admin-form-label">Product Name</label>
+            <input className="admin-input" placeholder="Product Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+          </div>
 
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-            <input placeholder="Base Price" type="number" value={form.basePrice || ''} onChange={e => setForm({...form, basePrice: parseFloat(e.target.value)})} style={{ flex: 1, padding: '12px', background: '#111', border: '1px solid #333', color: '#fff' }} />
-            <input placeholder="Stock Quantity" type="number" value={form.stock || ''} onChange={e => setForm({...form, stock: parseInt(e.target.value)})} style={{ flex: 1, padding: '12px', background: '#111', border: '1px solid #333', color: '#fff' }} />
+          <div className="admin-form-group">
+            <label className="admin-form-label">URL Slug</label>
+            <input className="admin-input" placeholder="URL Slug (e.g. vintage-tee)" value={form.slug} onChange={e => setForm({...form, slug: e.target.value})} />
+          </div>
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">Tagline</label>
+            <input className="admin-input" placeholder="Tagline (e.g. Silence speaks. So does the fabric.)" value={tagline} onChange={e => setTagline(e.target.value)} />
+          </div>
+          
+          <div className="admin-form-group">
+            <label className="admin-form-label">Product Description</label>
+            <textarea className="admin-textarea" placeholder="Product Description..." rows="4" value={form.description} onChange={e => setForm({...form, description: e.target.value})} style={{ resize: 'vertical' }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            <div className="admin-form-group" style={{ marginBottom: 0 }}>
+              <label className="admin-form-label">Base Price (INR)</label>
+              <input className="admin-input" placeholder="Base Price" type="number" value={form.basePrice || ''} onChange={e => setForm({...form, basePrice: parseFloat(e.target.value)})} />
+            </div>
+            <div className="admin-form-group" style={{ marginBottom: 0 }}>
+              <label className="admin-form-label">Default Rating</label>
+              <input className="admin-input" placeholder="Default Rating (1.0 to 5.0)" type="number" step="0.1" min="1" max="5" value={defaultRating} onChange={e => setDefaultRating(parseFloat(e.target.value))} />
+            </div>
+          </div>
+
+          {/* Category Dropdown/Checkboxes Selection */}
+          <div style={{ marginBottom: '24px', border: '1px solid var(--admin-border)', padding: '20px', background: '#050505', borderRadius: '4px' }}>
+            <p className="admin-form-label" style={{ marginBottom: '16px' }}>Categories</p>
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              {categories.map(cat => (
+                <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#fff' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCategoryIds.includes(cat.id)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedCategoryIds([...selectedCategoryIds, cat.id])
+                      } else {
+                        setSelectedCategoryIds(selectedCategoryIds.filter(id => id !== cat.id))
+                      }
+                    }}
+                    style={{ accentColor: 'var(--admin-accent)' }}
+                  />
+                  {cat.name} <span style={{ color: 'var(--admin-text-secondary)', fontSize: '11px' }}>({cat.type})</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Variant Specifications (Size, Color, Stock, SKU) */}
+          <div style={{ marginBottom: '24px', border: '1px solid var(--admin-border)', padding: '20px', background: '#050505', borderRadius: '4px' }}>
+            <p className="admin-form-label" style={{ marginBottom: '16px' }}>Product Variant Details</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              
+              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                <label className="admin-form-label">Size</label>
+                <select 
+                  className="admin-input" 
+                  value={size} 
+                  onChange={e => setSize(e.target.value)}
+                  style={{ background: '#000', color: '#fff', border: '1px solid var(--admin-border)', height: '40px' }}
+                >
+                  <option value="XS">XS</option>
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                  <option value="XXL">XXL</option>
+                </select>
+              </div>
+
+              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                <label className="admin-form-label">Color Name</label>
+                <input 
+                  className="admin-input" 
+                  placeholder="e.g. Carbon Black" 
+                  value={color} 
+                  onChange={e => setColor(e.target.value)} 
+                />
+              </div>
+
+              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                <label className="admin-form-label">Color Hex Code</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input 
+                    className="admin-input" 
+                    type="color" 
+                    value={colorHex} 
+                    onChange={e => setColorHex(e.target.value)} 
+                    style={{ width: '40px', padding: 0, height: '40px', border: 'none', cursor: 'pointer' }}
+                  />
+                  <input 
+                    className="admin-input" 
+                    placeholder="#121212" 
+                    value={colorHex} 
+                    onChange={e => setColorHex(e.target.value)} 
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                <label className="admin-form-label">Stock Quantity</label>
+                <input 
+                  className="admin-input" 
+                  type="number" 
+                  placeholder="Stock quantity" 
+                  value={stockQuantity} 
+                  onChange={e => setStockQuantity(parseInt(e.target.value) || 0)} 
+                />
+              </div>
+
+              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                <label className="admin-form-label">SKU (Optional)</label>
+                <input 
+                  className="admin-input" 
+                  placeholder="Auto-generated if empty" 
+                  value={form.sku} 
+                  onChange={e => setForm({ ...form, sku: e.target.value })} 
+                />
+              </div>
+
+            </div>
           </div>
 
           {/* Image Upload Area */}
-          <div style={{ marginBottom: '30px', padding: '20px', border: '1px dashed #444', borderRadius: '4px' }}>
-            <p style={{ color: '#888', marginBottom: '10px' }}>Product Image</p>
-            <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'block', marginBottom: '10px' }} />
-            {uploading && <span style={{ color: '#00cc66' }}>Uploading to Cloudinary...</span>}
-            {form.thumbnailUrl && !uploading && (
-               <img src={form.thumbnailUrl} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px', marginTop: '10px' }} />
+          <div style={{ marginBottom: '30px', padding: '24px', border: '1px dashed var(--admin-border-light)', borderRadius: '4px', background: '#050505' }}>
+            <p className="admin-form-label" style={{ marginBottom: '12px' }}>Product Images (Upload Multiple — Max 7, current: {imagesList.length}/7)</p>
+            <input type="file" accept="image/*" multiple onChange={handleMultipleImageUpload} disabled={imagesList.length >= 7} style={{ display: 'block', marginBottom: '16px', fontSize: '12px', color: 'var(--admin-text-secondary)' }} />
+            {uploading && <span style={{ color: 'var(--admin-accent)', fontSize: '12px', display: 'block', marginBottom: '12px' }}>Uploading to Cloudinary...</span>}
+            {imagesList.length >= 7 && <span style={{ color: 'var(--admin-accent)', fontSize: '11px', display: 'block', marginBottom: '12px' }}>Maximum limit of 7 images reached. Delete some to add new ones.</span>}
+            
+            {imagesList.length > 0 && (
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
+                {imagesList.map((url, idx) => (
+                  <div key={url} style={{ position: 'relative', border: '1px solid var(--admin-border)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <img src={url} alt={`Preview ${idx}`} style={{ width: '80px', height: '80px', objectFit: 'cover' }} />
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setImagesList(imagesList.filter(item => item !== url))
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        background: 'rgba(0,0,0,0.7)',
+                        color: 'white',
+                        borderRadius: '50%',
+                        width: '22px',
+                        height: '22px',
+                        fontSize: '11px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                      }}
+                      title="Delete image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          <button className="btn-primary" style={{ padding: '12px 30px' }} onClick={handleSubmit} disabled={uploading}>
-            {uploading ? 'Uploading Image...' : 'Save Product'}
+          <button className="admin-btn-primary" onClick={handleSubmit} disabled={uploading}>
+            {uploading ? 'Uploading Images...' : 'Save Product'}
           </button>
         </div>
       )}
 
-      <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid #333' }}>
-            <th style={{ padding: '16px', color: '#777' }}>Image</th>
-            <th style={{ padding: '16px', color: '#777' }}>Name</th>
-            <th style={{ padding: '16px', color: '#777' }}>Price</th>
-            <th style={{ padding: '16px', color: '#777' }}>Stock</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map(p => (
-            <tr key={p.id} style={{ borderBottom: '1px solid #222' }}>
-              <td style={{ padding: '16px' }}>
-                <img src={p.thumbnailUrl || 'https://via.placeholder.com/50'} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} alt="" />
-              </td>
-              <td style={{ padding: '16px' }}>{p.name}</td>
-              <td style={{ padding: '16px' }}>${p.basePrice}</td>
-              <td style={{ padding: '16px' }}>{p.stock}</td>
+      <div className="admin-table-container">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th style={{ width: '80px' }}>Image</th>
+              <th>Name</th>
+              <th>SKU</th>
+              <th>Size</th>
+              <th>Color</th>
+              <th style={{ width: '100px' }}>Stock</th>
+              <th style={{ width: '110px' }}>Status</th>
+              <th style={{ width: '200px', textAlign: 'right' }}>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {products.map(p => {
+              const firstVariant = p.variants?.[0]
+              return (
+                <tr key={p.id}>
+                  <td>
+                    <img src={p.thumbnailUrl || 'https://via.placeholder.com/50'} style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '2px', border: '1px solid var(--admin-border)' }} alt="" />
+                  </td>
+                  <td style={{ fontWeight: 500 }}>{p.name}</td>
+                  <td style={{ fontSize: '12px', color: 'var(--admin-text-secondary)' }}>{firstVariant?.sku || 'N/A'}</td>
+                  <td>
+                    <span style={{
+                      padding: '2px 6px',
+                      border: '1px solid var(--admin-border)',
+                      fontSize: '11px',
+                      background: 'rgba(255,255,255,0.05)',
+                      borderRadius: '2px'
+                    }}>
+                      {firstVariant?.size || 'N/A'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {firstVariant?.colorHex && (
+                        <span style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          background: firstVariant.colorHex,
+                          border: '1px solid var(--admin-border)',
+                          display: 'inline-block'
+                        }} />
+                      )}
+                      <span>{firstVariant?.color || 'N/A'}</span>
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{firstVariant?.stockQuantity || 0}</td>
+                <td>
+                  <span className="admin-badge" style={{
+                    borderColor: p.isActive ? 'var(--admin-accent)' : 'var(--admin-border-light)',
+                    color: p.isActive ? '#000000' : 'var(--admin-text-secondary)',
+                    backgroundColor: p.isActive ? 'var(--admin-accent)' : 'transparent',
+                    padding: '2px 8px',
+                    fontSize: '9px',
+                    width: '80px',
+                    textAlign: 'center',
+                    justifyContent: 'center',
+                    display: 'block'
+                  }}>
+                    {p.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button
+                    onClick={() => handleToggleActive(p)}
+                    className="admin-btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '10px', marginRight: '8px' }}
+                  >
+                    {p.isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProduct(p.id)}
+                    className="admin-btn-danger"
+                    style={{ padding: '6px 12px', fontSize: '10px' }}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            )})}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

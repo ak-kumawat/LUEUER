@@ -37,6 +37,7 @@ model Category {
   imageUrl     String?
   isActive     Boolean  @default(true)
   displayOrder Int      @default(0)
+  baseWeight   Float?
   createdAt    DateTime @default(now())
 
   parent   Category?  @relation("CategoryParent", fields: [parentId], references: [id])
@@ -49,12 +50,14 @@ model Product {
   id           String   @id @default(uuid())
   name         String
   slug         String   @unique
+  tagline      String?
   description  String
   basePrice    Decimal
   thumbnailUrl String?
   brand        String   @default("LUEUER")
   isActive     Boolean  @default(true)
   isFeatured   Boolean  @default(false)
+  defaultRating Float   @default(4.8)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -63,6 +66,8 @@ model Product {
   images     ProductImage[]
   wishlist   Wishlist[]
   ratings    Rating[]
+
+  @@index([isActive])
 }
 
 model ProductCategory {
@@ -89,6 +94,9 @@ model ProductVariant {
   product    Product     @relation(fields: [productId], references: [id])
   cartItems  CartItem[]
   orderItems OrderItem[]
+
+  @@index([productId])
+  @@index([isActive])
 }
 
 model ProductImage {
@@ -149,10 +157,22 @@ model Order {
   notes             String?
   placedAt          DateTime @default(now())
 
+  // Shiprocket fields
+  shiprocketOrderId String?
+  awbCode           String?
+  courierName       String?
+
+  // Returns and refunds fields
+  returnReason      String?
+  refundId          String?
+
   user            User                 @relation(fields: [userId], references: [id])
   shippingAddress Address              @relation(fields: [shippingAddressId], references: [id])
   items           OrderItem[]
   statusHistory   OrderStatusHistory[]
+
+  @@index([userId])
+  @@index([status])
 }
 
 model OrderItem {

@@ -1,233 +1,397 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useAuth, useClerk } from '@clerk/nextjs'
 import { useCart } from '../shared/CartContext'
+import { getWishlist, addToWishlist, removeFromWishlist } from '../../../lib/api'
+
+// Import Swiper React components and modules
+import { Swiper, SwiperSlide } from 'swiper/react'
+import { Pagination, Navigation } from 'swiper/modules'
+
+// Import Swiper styles
+import 'swiper/css'
+import 'swiper/css/pagination'
+import 'swiper/css/navigation'
 
 export default function ProductCard({ product, onClick, light = false }) {
   const [hovered, setHovered] = useState(false)
   const [activeImgIndex, setActiveImgIndex] = useState(0)
-  const { addToCart } = useCart()
+  const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart()
+  const { isSignedIn } = useAuth()
+  const clerk = useClerk()
+  const router = useRouter()
+
+  const [quantity, setQuantity] = useState(1)
+  const [isWishlisted, setIsWishlisted] = useState(false)
+  const [wishlistId, setWishlistId] = useState(null)
+  const clickTimeoutRef = useRef(null)
+
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Extract all available images
   const primaryImage = product.images?.find(img => img.isPrimary)?.imageUrl || product.thumbnailUrl
   const otherImages = product.images?.filter(img => !img.isPrimary).map(img => img.imageUrl) || []
   const allImages = primaryImage ? [primaryImage, ...otherImages] : ['/images/tshirt.webp']
 
-  // Extract unique colors from variants, fallback to standard premium options if none exist
-  const uniqueColors = []
-  const colorMap = new Map()
-  product.variants?.forEach(v => {
-    if (v.color && !colorMap.has(v.color.toLowerCase())) {
-      colorMap.set(v.color.toLowerCase(), v)
-      uniqueColors.push({ name: v.color, hex: v.colorHex })
-    }
-  })
-  const defaultColors = [
-    { name: 'Black', hex: '#0a0a0a' },
-    { name: 'Charcoal', hex: '#4a4a4a' },
-    { name: 'Olive', hex: '#5b584e' },
-    { name: 'Sand', hex: '#d9d2c5' }
-  ]
-  const colorsList = uniqueColors.length > 0 ? uniqueColors : defaultColors
-  const [selectedColor, setSelectedColor] = useState(colorsList[0]?.name)
+  // Helper to check if size is out of stock
+  const getVariantForSize = (sizeName) => {
+    return product.variants?.find(v => v.size.toUpperCase() === sizeName.toUpperCase())
+  }
 
-  // Extract unique sizes from variants, fallback to standard size options if none exist
-  const uniqueSizes = []
-  const sizeMap = new Set()
-  product.variants?.forEach(v => {
-    if (v.size && !sizeMap.has(v.size.toUpperCase())) {
-      sizeMap.add(v.size.toUpperCase())
-      uniqueSizes.push(v.size.toUpperCase())
-    }
-  })
+  const isSizeOutOfStock = (sizeName) => {
+    const v = getVariantForSize(sizeName)
+    // If variant doesn't exist, treat as out of stock. If exists, check stock quantity.
+    return v ? v.stockQuantity === 0 : true
+  }
+
+  // Extract unique sizes from variants and merge with default standard sizes
   const defaultSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
-  const sizesList = uniqueSizes.length > 0 ? uniqueSizes : defaultSizes
-  const [selectedSize, setSelectedSize] = useState(sizesList[1] || sizesList[0]) // default to 'S' if present
+  const sizesList = [...defaultSizes]
+  product.variants?.forEach(v => {
+    if (v.size) {
+      const upperSize = v.size.toUpperCase()
+      if (!sizesList.includes(upperSize)) {
+        sizesList.push(upperSize)
+      }
+    }
+  })
+  // Sort size list to follow standard order: XS -> XXL
+  const orderMap = { 'XS': 1, 'S': 2, 'M': 3, 'L': 4, 'XL': 5, 'XXL': 6 }
+  sizesList.sort((a, b) => (orderMap[a] || 99) - (orderMap[b] || 99))
 
-  // Quantity selector state
-  const [quantity, setQuantity] = useState(1)
+  // Find the first size that is in stock to select it initially
+  const firstInStockSize = sizesList.find(s => !isSizeOutOfStock(s))
+  const [selectedSize, setSelectedSize] = useState(firstInStockSize || sizesList[0])
 
-  // Find matching variant based on selections, fallback to first variant
-  const selectedVariant = product.variants?.find(v => 
-    (selectedSize ? v.size.toUpperCase() === selectedSize.toUpperCase() : true) &&
-    (selectedColor ? v.color.toLowerCase() === selectedColor.toLowerCase() : true)
-  ) || product.variants?.[0]
+  // Find matching variant based on selections
+  const selectedVariant = getVariantForSize(selectedSize) || product.variants?.[0]
+  const cartItem = cartItems?.find(item => item.variantId === selectedVariant?.id)
 
   // Calculate average rating
   const avgRating = product.ratings?.length > 0
     ? (product.ratings.reduce((sum, r) => sum + r.value, 0) / product.ratings.length).toFixed(1)
-    : '4.8' // Fallback to matching design aesthetic 4.8 default
+    : (product.defaultRating ? parseFloat(product.defaultRating).toFixed(1) : '4.8')
 
   const price = selectedVariant?.priceOverride
     ? parseFloat(selectedVariant.priceOverride)
     : parseFloat(product.basePrice)
 
-  // Carousel handlers
-  const handlePrev = (e) => {
+  // Wishlist sync
+  useEffect(() => {
+    if (!isSignedIn) return
+    const checkWishlist = async () => {
+      try {
+        const res = await getWishlist()
+        const items = res.data?.data || []
+        const found = items.find(item => item.productId === product.id)
+        if (found) {
+          setIsWishlisted(true)
+          setWishlistId(found.id)
+        }
+      } catch {}
+    }
+    checkWishlist()
+  }, [isSignedIn, product.id])
+
+  const handleWishlistClick = async (e) => {
     e.stopPropagation()
-    setActiveImgIndex(prev => (prev === 0 ? allImages.length - 1 : prev - 1))
+    if (!isSignedIn) {
+      clerk.openSignIn()
+      return
+    }
+
+    if (clickTimeoutRef.current) {
+      // Double click: remove from wishlist and turn back to outline
+      clearTimeout(clickTimeoutRef.current)
+      clickTimeoutRef.current = null
+      
+      try {
+        if (isWishlisted && wishlistId) {
+          setIsWishlisted(false)
+          const currentWishlistId = wishlistId
+          setWishlistId(null)
+          await removeFromWishlist(currentWishlistId)
+        }
+      } catch (err) {}
+    } else {
+      // Single click: wait to see if it's a double click, then add to wishlist
+      clickTimeoutRef.current = setTimeout(async () => {
+        clickTimeoutRef.current = null
+        
+        try {
+          if (!isWishlisted) {
+            setIsWishlisted(true)
+            const res = await addToWishlist({ productId: product.id })
+            setWishlistId(res.data?.data?.id)
+          }
+        } catch (err) {
+          setIsWishlisted(false)
+        }
+      }, 250)
+    }
   }
 
-  const handleNext = (e) => {
+  const handleAddToCartClick = (e) => {
     e.stopPropagation()
-    setActiveImgIndex(prev => (prev === allImages.length - 1 ? 0 : prev + 1))
+    if (!isSignedIn) {
+      clerk.openSignIn()
+      return
+    }
+    if (!selectedVariant) {
+      alert("This product is currently out of stock.")
+      return
+    }
+    addToCart(product, selectedVariant)
+  }
+
+  const handleBuyNowClick = async (e) => {
+    e.stopPropagation()
+    if (!isSignedIn) {
+      clerk.openSignIn()
+      return
+    }
+    if (!selectedVariant) {
+      alert("This product is currently out of stock.")
+      return
+    }
+    const existing = cartItems?.find(item => item.variantId === selectedVariant.id)
+    if (!existing) {
+      await addToCart(product, selectedVariant)
+    }
+    router.push('/checkout')
   }
 
   return (
     <div
-      className={`premium-product-card ${hovered ? 'hovered' : ''}`}
+      className={`premium-product-card ${light ? 'light' : ''} ${hovered ? 'hovered' : ''}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => onClick && onClick(product)}
+      onClick={() => router.push(`/product/${product.slug}`)}
     >
       {/* Product Image Well */}
-      <div className="card-image-well">
-        <img
-          src={allImages[activeImgIndex]}
-          alt={product.name}
-        />
-
-        {/* Carousel controls shown on hover */}
-        {hovered && allImages.length > 1 && (
-          <>
-            <button className="carousel-arrow left" onClick={handlePrev}>
-              &#8249;
-            </button>
-            <button className="carousel-arrow right" onClick={handleNext}>
-              &#8250;
-            </button>
-          </>
-        )}
-
-        {/* Carousel pagination dots shown on hover */}
-        {hovered && allImages.length > 1 && (
-          <div className="carousel-dots">
-            {allImages.map((_, idx) => (
-              <span
-                key={idx}
-                className={`carousel-dot ${idx === activeImgIndex ? 'active' : ''}`}
-              />
-            ))}
-          </div>
-        )}
+      <div className="card-image-well" onClick={(e) => e.stopPropagation()}>
+        <Swiper
+          modules={[Pagination, Navigation]}
+          pagination={{ clickable: true }}
+          navigation={true}
+          spaceBetween={0}
+          slidesPerView={1}
+          onSlideChange={(swiper) => setActiveImgIndex(swiper.activeIndex)}
+          style={{
+            width: '100%',
+            height: '100%',
+            '--swiper-pagination-color': 'var(--color-accent)',
+            '--swiper-pagination-bullet-inactive-color': 'rgba(255,255,255,0.3)',
+            '--swiper-pagination-bullet-inactive-opacity': '1',
+            '--swiper-pagination-bullet-size': '6px',
+            '--swiper-pagination-bullet-horizontal-gap': '3px'
+          }}
+        >
+          {allImages.map((imgUrl, idx) => (
+            <SwiperSlide key={idx} style={{ width: '100%', height: '100%' }}>
+              <div
+                onClick={() => router.push(`/product/${product.slug}`)}
+                style={{ cursor: 'pointer', width: '100%', height: '100%' }}
+              >
+                <img
+                  src={imgUrl}
+                  alt={`${product.name} - image ${idx + 1}`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
+              </div>
+            </SwiperSlide>
+          ))}
+        </Swiper>
 
         {/* Featured Tag */}
         {product.isFeatured && (
-          <span className="card-badge-featured">Featured</span>
+          <span className="card-badge-featured" style={{ zIndex: 12 }}>Featured</span>
         )}
 
-        {/* Wishlist Hearts / Image index indicator */}
-        <span className="card-badge-count">
-          &#9825; {activeImgIndex + 1}/{allImages.length}
-        </span>
-
-        {/* Quick View Bar */}
-        <div className="card-quick-view-bar">
-          Quick View
-        </div>
-      </div>
-
-      {/* Product Details Section */}
-      <div className="card-collection-label">
-        Signature Collection
-      </div>
-
-      <Link href={`/product/${product.slug}`} onClick={(e) => e.stopPropagation()}>
-        <h3 className="card-product-title">
-          {product.name}
-        </h3>
-      </Link>
-
-      <p className="card-product-desc" title={product.description}>
-        {product.description || '360 GSM premium cotton construction.'}
-      </p>
-
-      {/* Selectors Row: Colors on Left, Sizes on Right */}
-      <div className="card-selectors-row" onClick={(e) => e.stopPropagation()}>
-        {/* Colors */}
-        <div className="card-colors-container">
-          {colorsList.map(c => (
-            <button
-              key={c.name}
-              className={`card-color-swatch ${selectedColor === c.name ? 'active' : ''}`}
-              style={{ backgroundColor: c.hex }}
-              title={c.name}
-              onClick={() => setSelectedColor(c.name)}
-            />
-          ))}
-        </div>
-
-        {/* Ratings Star Badge */}
-        <div className="card-rating">
-          &#9733; {avgRating}
-        </div>
-      </div>
-
-      {/* Sizes Selection */}
-      <div className="card-selectors-row" style={{ marginTop: '-8px' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card-sizes-container">
-          {sizesList.map(s => (
-            <button
-              key={s}
-              className={`card-size-pill ${selectedSize === s ? 'active' : ''}`}
-              onClick={() => setSelectedSize(s)}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Meta Price Row */}
-      <div className="card-meta-row">
-        <span className="card-price">
-          ₹{price.toLocaleString('en-IN')}
-        </span>
-      </div>
-
-      {/* Action Buttons Grid */}
-      <div className="card-actions-grid" onClick={(e) => e.stopPropagation()}>
-        <div className="card-actions-row-1">
-          {/* Details Button + Quantity Select Group */}
-          <div className="card-qty-details-group">
-            <Link href={`/product/${product.slug}`} className="card-btn-details">
-              Details
-            </Link>
-            <input
-              type="number"
-              min="1"
-              className="card-qty-input"
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-            />
-          </div>
-
-          {/* Add to Cart */}
-          <button
-            className="card-btn-add-cart"
-            onClick={() => {
-              if (selectedVariant) {
-                addToCart(product, selectedVariant, quantity)
-              }
-            }}
-          >
-            Add To Cart
-          </button>
-        </div>
-
-        {/* Buy Now */}
+        {/* Wishlist Heart Button floating in top-right */}
         <button
-          className="card-btn-buy-now"
-          onClick={() => {
-            if (selectedVariant) {
-              addToCart(product, selectedVariant, quantity)
-              window.location.href = '/cart'
-            }
+          className={`card-wishlist-float ${isWishlisted ? 'wishlisted' : ''}`}
+          onClick={handleWishlistClick}
+          title="Wishlist"
+          style={{ zIndex: 12 }}
+        >
+          {isWishlisted ? '♥' : '♡'}
+        </button>
+
+        {/* Image index indicator */}
+        <span className="card-badge-count" style={{ zIndex: 12 }}>
+          {activeImgIndex + 1}/{allImages.length}
+        </span>
+      </div>
+
+      {/* Upper Card Details Section (Dark Background) */}
+      <div className="card-body-wrapper">
+        <div className="card-meta-header-row" onClick={(e) => e.stopPropagation()}>
+          <div className="card-collection-label" style={{ margin: 0 }}>
+            {product.tagline || 'Signature Collection'}
+          </div>
+          <div className="card-rating">
+            &#9733; {avgRating}
+          </div>
+        </div>
+
+        <h3
+          className="card-product-title"
+          onClick={(e) => {
+            e.stopPropagation()
+            router.push(`/product/${product.slug}`)
           }}
         >
-          Buy Now
-        </button>
+          {product.name}
+        </h3>
+
+        {/* Short description for premium look */}
+        <p className="card-product-description">
+          {product.description ? (product.description.slice(0, 80) + '...') : 'A study in texture and presence. Premium fabrics, tailored fit.'}
+        </p>
+
+        {/* Meta Price Row */}
+        <div className="card-meta-row" style={{ borderTop: 'none', paddingTop: 0 }}>
+          <span className="card-price">
+            ₹{price.toLocaleString('en-IN')}
+          </span>
+        </div>
+      </div>
+
+      {/* White Footer Action Buttons Panel */}
+      <div className="card-footer-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="card-actions-row-1">
+          {/* Details Button */}
+          <button
+            className="card-btn-details"
+            onClick={(e) => {
+              e.stopPropagation()
+              router.push(`/product/${product.slug}`)
+            }}
+          >
+            <svg className="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            Details
+          </button>
+
+          {/* Add to Cart */}
+          {cartItem ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#121212',
+                color: '#ffffff',
+                border: '1px solid #121212',
+                borderRadius: '4px',
+                height: '36px',
+                overflow: 'hidden'
+              }}
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const targetQty = cartItem.quantity - 1
+                  if (targetQty < 1) {
+                    removeFromCart(selectedVariant.id)
+                  } else {
+                    updateQuantity(selectedVariant.id, targetQty)
+                  }
+                }}
+                style={{
+                  width: '32px',
+                  height: '100%',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  background: 'transparent'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#262626'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                -
+              </button>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-accent)' }}>
+                {cartItem.quantity}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const targetQty = cartItem.quantity + 1
+                  if (selectedVariant.stockQuantity < targetQty) {
+                    alert(`Only ${selectedVariant.stockQuantity} items in stock.`)
+                    return
+                  }
+                  updateQuantity(selectedVariant.id, targetQty)
+                }}
+                style={{
+                  width: '32px',
+                  height: '100%',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  background: 'transparent'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#262626'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              className="card-btn-add-cart"
+              onClick={handleAddToCartClick}
+              disabled={!selectedVariant || selectedVariant.stockQuantity === 0}
+            >
+              <svg className="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                <circle cx="9" cy="21" r="1"/>
+                <circle cx="20" cy="21" r="1"/>
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+              </svg>
+              {!selectedVariant || selectedVariant.stockQuantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+            </button>
+          )}
+        </div>
+
+        {/* Buy Now (Full Width) */}
+        <div className="card-actions-row-2" style={{ display: 'block' }}>
+          <button
+            className="card-btn-buy-now"
+            onClick={handleBuyNowClick}
+            style={{ width: '100%', margin: 0 }}
+          >
+            Buy Now
+          </button>
+        </div>
       </div>
     </div>
   )

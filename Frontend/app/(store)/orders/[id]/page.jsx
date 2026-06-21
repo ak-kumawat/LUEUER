@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react'
 import AuthWrapper from '../../../components/shared/AuthWrapper'
 import Footer from '../../../components/store/Footer'
-import { getOrderById } from '../../../../lib/api'
+import { getOrderById, cancelOrder } from '../../../../lib/api'
 
 const statusColors = {
   pending: '#a0a0a0',
@@ -21,15 +21,17 @@ export default function OrderDetailPage({ params }) {
 
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [cancelling, setCancelling] = useState(false)
+
+  const fetchOrder = async () => {
+    try {
+      const res = await getOrderById(id)
+      setOrder(res.data?.data)
+    } catch { } finally { setLoading(false) }
+  }
 
   useEffect(() => {
-    const fetch = async () => {
-      try {
-        const res = await getOrderById(id)
-        setOrder(res.data?.data)
-      } catch { } finally { setLoading(false) }
-    }
-    fetch()
+    fetchOrder()
   }, [id])
 
   if (loading) {
@@ -44,23 +46,83 @@ export default function OrderDetailPage({ params }) {
 
   if (!order) return null
 
+  const handleCancelOrder = async () => {
+    if (!confirm('Are you sure you want to cancel this order? This action cannot be undone.')) return
+    setCancelling(true)
+    try {
+      await cancelOrder(id)
+      await fetchOrder()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to cancel order')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   return (
     <AuthWrapper>
       <div style={{ padding: '60px 24px' }}>
         <div className="container">
-          <div style={{ marginBottom: '64px' }}>
-            <p className="section-label" style={{ marginBottom: '16px' }}>
-              Order Details
-            </p>
-            <h1 style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 'clamp(28px, 4vw, 56px)',
-              fontWeight: 300,
-              letterSpacing: '0.05em'
-            }}>
-              {order.orderNumber}
-            </h1>
+          <div style={{
+            marginBottom: '64px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            gap: '20px',
+            borderBottom: '1px solid var(--color-border)',
+            paddingBottom: '24px'
+          }}>
+            <div>
+              <p className="section-label" style={{ marginBottom: '16px' }}>
+                Order Details
+              </p>
+              <h1 style={{
+                fontFamily: 'var(--font-serif)',
+                fontSize: 'clamp(28px, 4vw, 56px)',
+                fontWeight: 300,
+                margin: 0,
+                letterSpacing: '0.05em'
+              }}>
+                {order.orderNumber}
+              </h1>
+            </div>
+
+            {order.status === 'pending' && !order.shiprocketOrderId && !order.awbCode && (
+              <button
+                className="btn-secondary"
+                onClick={handleCancelOrder}
+                disabled={cancelling}
+                style={{
+                  fontSize: '11px',
+                  padding: '12px 24px',
+                  letterSpacing: '0.15em',
+                  borderColor: '#ef4444',
+                  color: '#ef4444',
+                  borderRadius: '2px',
+                  cursor: 'pointer'
+                }}
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Order'}
+              </button>
+            )}
           </div>
+
+          {order.status === 'cancelled' && order.paymentStatus === 'refund_pending' && (
+            <div style={{
+              padding: '20px 24px',
+              background: 'rgba(245,231,198,0.03)',
+              border: '1px solid var(--color-accent)',
+              color: 'var(--color-accent)',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              marginBottom: '40px',
+              letterSpacing: '0.03em',
+              borderRadius: '2px'
+            }}>
+              💰 <strong>Refund Notice:</strong> This order has been cancelled. Your refund is being processed and will be credited to your account within 24 hours.
+            </div>
+          )}
 
           <div style={{
             display: 'grid',
@@ -217,11 +279,11 @@ export default function OrderDetailPage({ params }) {
                 <p className="section-label" style={{ marginBottom: '20px' }}>
                   Payment Summary
                 </p>
-                <div style={{ display: 'flex', justifycontent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Subtotal</p>
                   <p style={{ fontSize: '13px' }}>₹{parseFloat(order.subtotal).toLocaleString('en-IN')}</p>
                 </div>
-                <div style={{ display: 'flex', justifycontent: 'space-between', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                   <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Shipping</p>
                   <p style={{ fontSize: '13px' }}>
                     {parseFloat(order.shippingFee) === 0 ? 'Free' : `₹${parseFloat(order.shippingFee).toLocaleString('en-IN')}`}
@@ -229,7 +291,7 @@ export default function OrderDetailPage({ params }) {
                 </div>
                 <div style={{
                   display: 'flex',
-                  justifycontent: 'space-between',
+                  justifyContent: 'space-between',
                   paddingTop: '16px',
                   borderTop: '1px solid var(--color-border)'
                 }}>

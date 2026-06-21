@@ -4,6 +4,8 @@ import crypto from 'crypto'
 import ApiError from '../util/ApiError.js'
 import ApiResponse from '../util/ApiResponse.js'
 import asyncHandler from '../util/asyncHandler.js'
+import { sendOrderConfirmationEmail } from '../util/email.js'
+import { calculateCartWeight, checkServiceabilityAndRates } from '../util/shiprocket.js'
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -21,12 +23,62 @@ const generateOrderNumber = async () => {
 }
 
 export const createRazorpayOrder = asyncHandler(async (req, res) => {
-  const { amount } = req.body
+  const { shippingAddressId } = req.body
 
-  if (!amount) throw new ApiError(400, "Amount is required")
+  if (!shippingAddressId) {
+    throw new ApiError(400, "shippingAddressId is required")
+  }
+
+  const dbUser = await getUserFromClerk(req.user.id)
+  if (!dbUser) {
+    throw new ApiError(404, "User not found")
+  }
+
+  const cart = await prisma.cart.findUnique({
+    where: { userId: dbUser.id },
+    include: {
+      items: {
+        include: {
+          variant: {
+            include: { product: { include: { categories: { include: { category: true } } } } }
+          }
+        }
+      }
+    }
+  })
+
+  if (!cart || cart.items.length === 0) {
+    throw new ApiError(400, "Cart is empty")
+  }
+
+  const address = await prisma.address.findFirst({
+    where: { id: shippingAddressId, userId: dbUser.id }
+  })
+  if (!address) {
+    throw new ApiError(404, "Shipping address not found")
+  }
+
+  let subtotal = 0
+  for (const item of cart.items) {
+    const price = item.variant.priceOverride || item.variant.product.basePrice
+    subtotal += parseFloat(price) * item.quantity
+  }
+
+  const computedWeight = calculateCartWeight(cart.items)
+  const pickupPostcode = process.env.SHIPROCKET_PICKUP_POSTCODE || "302001"
+
+  const checkResult = await checkServiceabilityAndRates({
+    pickupPostcode,
+    deliveryPostcode: address.postalCode,
+    weight: computedWeight,
+    cod: 1
+  })
+
+  const shippingFee = checkResult.serviceable ? (checkResult.cheapest_rate || 0) : 0
+  const totalAmount = subtotal + shippingFee
 
   const order = await razorpay.orders.create({
-    amount: Math.round(amount * 100),
+    amount: Math.round(totalAmount * 100),
     currency: 'INR',
     receipt: `receipt_${Date.now()}`
   })
@@ -50,6 +102,13 @@ export const placeOrder = asyncHandler(async (req, res) => {
   if (!dbUser) throw new ApiError(404, "User not found")
 
   if (!shippingAddressId) throw new ApiError(400, "Shipping address is required")
+
+  const normalizedMethod = paymentMethod || 'razorpay'
+  if (normalizedMethod === 'razorpay') {
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      throw new ApiError(400, "Razorpay payment details are required for online payment")
+    }
+  }
 
   if (razorpayOrderId && razorpayPaymentId && razorpaySignature) {
     const body = razorpayOrderId + "|" + razorpayPaymentId
@@ -93,7 +152,22 @@ export const placeOrder = asyncHandler(async (req, res) => {
     }
   })
 
-  const shippingFee = subtotal > 999 ? 0 : 99
+  const address = await prisma.address.findFirst({
+    where: { id: shippingAddressId, userId: dbUser.id }
+  })
+  if (!address) throw new ApiError(404, "Shipping address not found")
+
+  const computedWeight = calculateCartWeight(cart.items)
+  const pickupPostcode = process.env.SHIPROCKET_PICKUP_POSTCODE || "302001"
+
+  const checkResult = await checkServiceabilityAndRates({
+    pickupPostcode,
+    deliveryPostcode: address.postalCode,
+    weight: computedWeight,
+    cod: 1
+  })
+
+  const shippingFee = checkResult.serviceable ? (checkResult.cheapest_rate || 0) : 0
   const totalAmount = subtotal + shippingFee
   const orderNumber = await generateOrderNumber()
 
@@ -105,7 +179,7 @@ export const placeOrder = asyncHandler(async (req, res) => {
       subtotal,
       shippingFee,
       totalAmount,
-      paymentMethod: paymentMethod || 'razorpay',
+      paymentMethod: normalizedMethod,
       paymentStatus: razorpayPaymentId ? 'paid' : 'unpaid',
       razorpayOrderId: razorpayOrderId || null,
       razorpayPaymentId: razorpayPaymentId || null,
@@ -122,7 +196,24 @@ export const placeOrder = asyncHandler(async (req, res) => {
     }
   })
 
+  // Decrement stock for variants in the order
+  for (const item of cart.items) {
+    await prisma.productVariant.update({
+      where: { id: item.variantId },
+      data: {
+        stockQuantity: {
+          decrement: item.quantity
+        }
+      }
+    })
+  }
+
   await prisma.cartItem.deleteMany({ where: { cartId: cart.id } })
+
+  // Send confirmation email asynchronously
+  sendOrderConfirmationEmail(order, dbUser.email).catch(err => {
+    console.error("Order confirmation email failed:", err)
+  })
 
   return res.status(201).json(
     new ApiResponse(201, order, "Order placed successfully")
@@ -231,5 +322,109 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   return res.status(200).json(
     new ApiResponse(200, updated, "Order status updated")
+  )
+})
+
+export const cancelOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params
+
+  const dbUser = await getUserFromClerk(req.user.id)
+  if (!dbUser) throw new ApiError(404, "User not found")
+
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: { items: true }
+  })
+
+  if (!order) throw new ApiError(404, "Order not found")
+
+  // Verify ownership
+  if (order.userId !== dbUser.id) {
+    throw new ApiError(403, "You do not have permission to cancel this order")
+  }
+
+  // Guard: Order must be pending and not already registered with Shiprocket
+  if (order.status !== 'pending') {
+    throw new ApiError(400, `Cannot cancel order in ${order.status} state`)
+  }
+
+  if (order.shiprocketOrderId || order.awbCode) {
+    throw new ApiError(400, "Cannot cancel order as shipment has already been initiated")
+  }
+
+  // Determine payment status update
+  let newPaymentStatus = order.paymentStatus
+  if (order.paymentMethod === 'razorpay' && order.paymentStatus === 'paid') {
+    newPaymentStatus = 'refund_pending'
+  } else if (order.paymentMethod === 'cod') {
+    newPaymentStatus = 'unpaid'
+  }
+
+  // Revert Stock quantities
+  for (const item of order.items) {
+    await prisma.productVariant.update({
+      where: { id: item.variantId },
+      data: {
+        stockQuantity: {
+          increment: item.quantity
+        }
+      }
+    })
+  }
+
+  // Update order status to cancelled
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      status: 'cancelled',
+      paymentStatus: newPaymentStatus,
+      statusHistory: {
+        create: {
+          status: 'cancelled',
+          note: 'Cancelled by customer'
+        }
+      }
+    },
+    include: { statusHistory: true }
+  })
+
+  return res.status(200).json(
+    new ApiResponse(200, updatedOrder, "Order cancelled successfully")
+  )
+})
+
+export const markOrderAsRefunded = asyncHandler(async (req, res) => {
+  const { id } = req.params
+
+  const order = await prisma.order.findUnique({
+    where: { id }
+  })
+
+  if (!order) throw new ApiError(404, "Order not found")
+
+  if (order.status !== 'cancelled') {
+    throw new ApiError(400, "Cannot mark refund on a non-cancelled order")
+  }
+
+  if (order.paymentStatus !== 'refund_pending') {
+    throw new ApiError(400, "Order is not in refund pending status")
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id },
+    data: {
+      paymentStatus: 'refunded',
+      statusHistory: {
+        create: {
+          status: 'cancelled',
+          note: 'Manual refund confirmed by admin'
+        }
+      }
+    },
+    include: { statusHistory: true }
+  })
+
+  return res.status(200).json(
+    new ApiResponse(200, updatedOrder, "Order marked as refunded")
   )
 })

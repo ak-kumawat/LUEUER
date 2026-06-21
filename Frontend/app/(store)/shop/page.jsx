@@ -42,20 +42,30 @@ export default function ShopPage() {
 
   return (
     <AuthWrapper>
-      <div style={{ padding: '60px 24px' }}>
+      <div className="shop-page-wrapper">
         <div className="container">
-          <div style={{ marginBottom: '64px' }}>
-            <p className="section-label" style={{ marginBottom: '16px' }}>
-              Collection
-            </p>
+          <div style={{ marginBottom: '64px' , textAlign: 'center' }}>
             <h1 style={{
               fontFamily: 'var(--font-serif)',
               fontSize: 'clamp(36px, 5vw, 72px)',
-              fontWeight: 300,
-              letterSpacing: '0.05em'
+              fontWeight: 710,
+              letterSpacing: '0.05em',
+              
+              display: 'inline-block'
             }}>
-              Shop LUEUER
+              Our
             </h1>
+            <h1 style={{
+              fontFamily: 'var(--font-serif)',
+              fontSize: 'clamp(36px, 5vw, 72px)',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              color:'#F5E7C6',
+              display:'inline-block'
+            }}>
+              Product
+            </h1>
+            <p style={{fontWeight:100}}>Built from Silence. Not for everyone. For those who move in silence and let their presence speak.</p>
           </div>
 
           <div style={{
@@ -145,21 +155,14 @@ export default function ShopPage() {
             </div>
           </div>
 
-          <p style={{
-            color: 'var(--color-text-muted)',
-            fontSize: '12px',
-            letterSpacing: '0.1em',
-            marginBottom: '40px'
-          }}>
-            {filteredProducts.length} products
-          </p>
-
           {loading ? (
             <div style={{ textAlign: 'center', padding: '80px' }}>
               <p style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
             </div>
           ) : (
-            <ProductGrid products={filteredProducts} />
+            <div className="shop-products-container">
+              <ProductGrid products={filteredProducts} light={true} />
+            </div>
           )}
         </div>
       </div>

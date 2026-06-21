@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth, RedirectToSignIn } from '@clerk/nextjs'
 import AuthWrapper from '../../components/shared/AuthWrapper'
 import Footer from '../../components/store/Footer'
 import { getUserOrders } from '../../../lib/api'
@@ -23,7 +23,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!isSignedIn) { setLoading(false); return }
+    if (!isSignedIn) return
     const fetch = async () => {
       try {
         const res = await getUserOrders()
@@ -32,6 +32,10 @@ export default function OrdersPage() {
     }
     fetch()
   }, [isSignedIn])
+
+  if (!isSignedIn) {
+    return <RedirectToSignIn />
+  }
 
   return (
     <AuthWrapper>

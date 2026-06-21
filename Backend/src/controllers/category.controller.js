@@ -45,7 +45,7 @@ export const getCategoryBySlug = asyncHandler(async (req, res) => {
 })
 
 export const createCategory = asyncHandler(async (req, res) => {
-  const { name, slug, type, parentId, description, imageUrl, displayOrder } = req.body
+  const { name, slug, type, parentId, description, imageUrl, displayOrder, baseWeight } = req.body
 
   if (!name || !slug || !type) {
     throw new ApiError(400, "Name, slug and type are required")
@@ -64,7 +64,8 @@ export const createCategory = asyncHandler(async (req, res) => {
       parentId: parentId || null,
       description: description || null,
       imageUrl: imageUrl || null,
-      displayOrder: displayOrder || 0
+      displayOrder: displayOrder || 0,
+      baseWeight: baseWeight !== undefined && baseWeight !== null ? parseFloat(baseWeight) : null
     }
   })
 
@@ -75,7 +76,7 @@ export const createCategory = asyncHandler(async (req, res) => {
 
 export const updateCategory = asyncHandler(async (req, res) => {
   const { id } = req.params
-  const { name, slug, type, parentId, description, imageUrl, isActive, displayOrder } = req.body
+  const { name, slug, type, parentId, description, imageUrl, isActive, displayOrder, baseWeight } = req.body
 
   const category = await prisma.category.findUnique({ where: { id } })
   if (!category) {
@@ -92,7 +93,8 @@ export const updateCategory = asyncHandler(async (req, res) => {
       description: description !== undefined ? description : category.description,
       imageUrl: imageUrl !== undefined ? imageUrl : category.imageUrl,
       isActive: isActive !== undefined ? isActive : category.isActive,
-      displayOrder: displayOrder !== undefined ? displayOrder : category.displayOrder
+      displayOrder: displayOrder !== undefined ? displayOrder : category.displayOrder,
+      baseWeight: baseWeight !== undefined ? (baseWeight !== null ? parseFloat(baseWeight) : null) : category.baseWeight
     }
   })
 

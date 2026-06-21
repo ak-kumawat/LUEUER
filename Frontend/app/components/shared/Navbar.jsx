@@ -220,7 +220,7 @@ export default function Navbar() {
           <img src={brandImages.logo} alt="" className="site-nav-drawer-logo" />
           <div className="site-nav-brand-text">
             <span className="site-nav-name">LURUER</span>
-            <span className="site-nav-tagline">LUXURY ESSENTIALS</span>
+            <span className="site-nav-tagline">Built from Silence</span>
           </div>
         </div>
 
