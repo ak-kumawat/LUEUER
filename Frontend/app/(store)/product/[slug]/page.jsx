@@ -9,6 +9,7 @@ import { getProductBySlug, getRatingsByProduct } from '../../../../lib/api'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import gsap from 'gsap'
+import Image from 'next/image'
 
 export default function ProductDetailPage({ params }) {
   const slug = params.slug
@@ -163,36 +164,47 @@ export default function ProductDetailPage({ params }) {
                 overflow: 'hidden',
                 background: 'var(--color-bg-secondary)',
                 border: '1px solid var(--color-border)',
-                marginBottom: '16px'
+                marginBottom: '16px',
+                position: 'relative'
               }}>
-                <img
-                  src={images[selectedImage]?.imageUrl || product.thumbnailUrl}
+                <Image
+                  src={images[selectedImage]?.imageUrl || product.thumbnailUrl || '/images/tshirt.webp'}
                   alt={product.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  style={{ objectFit: 'cover' }}
+                  priority
                 />
               </div>
 
               {images.length > 1 && (
                 <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '8px' }}>
                   {images.map((img, i) => (
-                    <img
+                    <div
                       key={i}
-                      src={img.imageUrl}
-                      alt=""
                       onClick={() => setSelectedImage(i)}
                       style={{
                         width: '76px',
                         height: '76px',
-                        objectFit: 'cover',
                         cursor: 'pointer',
                         border: selectedImage === i
                           ? '1px solid var(--color-accent)'
                           : '1px solid var(--color-border-light)',
                         opacity: selectedImage === i ? 1 : 0.4,
                         transition: 'all 0.3s',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        position: 'relative'
                       }}
-                    />
+                    >
+                      <Image
+                        src={img.imageUrl}
+                        alt=""
+                        fill
+                        sizes="76px"
+                        style={{ objectFit: 'cover' }}
+                        loading="lazy"
+                      />
+                    </div>
                   ))}
                 </div>
               )}
