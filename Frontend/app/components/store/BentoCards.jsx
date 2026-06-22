@@ -77,14 +77,14 @@ export default function BentoCards() {
     <section ref={containerRef} className="surface-dark section-padding">
       <div className="container">
         <div className="bento-header-anim" style={{ marginBottom: '60px', textAlign: 'center', opacity: 0 }}>
-          <p className="section-label">Our Standards</p>
+          <p className="section-label">Why Lueuer</p>
           <h2 style={{
             fontSize: 'clamp(32px, 4vw, 52px)',
             fontFamily: 'var(--font-serif)',
             fontWeight: 300,
             letterSpacing: '0.04em',
           }}>
-            No Compromises.
+           What sets us apart
           </h2>
           <div className="divider" style={{ margin: '24px auto' }} />
         </div>
