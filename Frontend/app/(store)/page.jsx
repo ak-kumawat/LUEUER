@@ -5,6 +5,7 @@ import BrandGallery from '../components/store/BrandGallery'
 import ProductGrid from '../components/store/ProductGrid'
 import Footer from '../components/store/Footer'
 import PosterFrame from '../components/store/PosterFrame'
+import HomeFAQ from '../components/store/HomeFAQ'
 import { getFeaturedProducts } from '../../lib/api'
 import { brandImages } from '../../lib/images'
 import Link from 'next/link'
@@ -67,6 +68,8 @@ export default async function HomePage() {
           <Link href="/shop" className="btn-primary">Explore Collection</Link>
         </div>
       </section>
+
+      <HomeFAQ />
 
       <Footer />
     </AuthWrapper>
