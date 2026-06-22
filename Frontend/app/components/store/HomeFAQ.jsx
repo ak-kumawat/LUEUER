@@ -86,8 +86,10 @@ export default function HomeFAQ() {
             letterSpacing: '0.04em',
             color: '#ffffff'
           }}>
-            F.A.Q
+            Frequently Asked Questions
           </h2>
+          <p className="section-label">Everything you need to know, 
+nothing you don't.</p>
           <div className="divider" style={{ margin: '24px auto' }} />
         </div>
 
