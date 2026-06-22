@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { useCart } from '../shared/CartContext'
 import { getWishlist, addToWishlist, removeFromWishlist } from '../../../lib/api'
-import Image from 'next/image'
 
 // Import Swiper React components and modules
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -202,16 +201,17 @@ export default function ProductCard({ product, onClick, light = false }) {
             <SwiperSlide key={idx} style={{ width: '100%', height: '100%' }}>
               <div
                 onClick={() => router.push(`/product/${product.slug}`)}
-                style={{ cursor: 'pointer', width: '100%', height: '100%', position: 'relative' }}
+                style={{ cursor: 'pointer', width: '100%', height: '100%' }}
               >
-                <Image
+                <img
                   src={imgUrl}
                   alt={`${product.name} - image ${idx + 1}`}
-                  fill
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  style={{ objectFit: 'cover' }}
-                  priority={idx === 0}
-                  loading={idx === 0 ? undefined : 'lazy'}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                  loading="lazy"
                 />
               </div>
             </SwiperSlide>

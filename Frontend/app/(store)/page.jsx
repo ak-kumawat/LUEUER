@@ -9,6 +9,12 @@ import HomeFAQ from '../components/store/HomeFAQ'
 import { getFeaturedProducts } from '../../lib/api'
 import { brandImages } from '../../lib/images'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+const MetallicCube = dynamic(
+  () => import('../components/store/MetallicCube'),
+  { ssr: false }
+)
 
 export default async function HomePage() {
   let featuredProducts = []
@@ -56,16 +62,21 @@ export default async function HomePage() {
       </section>
 
       <section className="surface-dark cta-section">
-        <div className="container cta-inner">
-          <p className="section-label">No Noise. No Rush. Just Purpose.</p>
-          <h2 className="cta-heading">
-            WEAR YOUR
-            <br />
-            IDENTITY
-          </h2>
-          <div className="divider cta-divider" />
-          <p className="cta-subtext">LIMITED DROP · TIMELESS IMPACT</p>
-          <Link href="/shop" className="btn-primary">Explore Collection</Link>
+        <div className="cta-container container">
+          <div className="cta-content-left">
+            <p className="section-label">No Noise. No Rush. Just Purpose.</p>
+            <h2 className="cta-heading-custom">
+              WEAR YOUR
+              <br />
+              IDENTITY
+            </h2>
+            <div className="cta-divider-custom" />
+            <p className="cta-subtext-custom">LIMITED DROP · TIMELESS IMPACT</p>
+            <Link href="/shop" className="btn-primary">Explore Collection</Link>
+          </div>
+          <div className="cta-cube-wrapper">
+            <MetallicCube />
+          </div>
         </div>
       </section>
 
