@@ -78,7 +78,6 @@ export default function HomeFAQ() {
         
         {/* Header */}
         <div className="faq-header-anim" style={{ marginBottom: '60px', textAlign: 'center', opacity: 0 }}>
-          <p className="section-label">Questions</p>
           <h2 style={{
             fontSize: 'clamp(32px, 4vw, 52px)',
             fontFamily: 'var(--font-serif)',
