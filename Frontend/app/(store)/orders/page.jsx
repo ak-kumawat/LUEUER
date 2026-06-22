@@ -18,12 +18,17 @@ const statusColors = {
 }
 
 export default function OrdersPage() {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, isLoaded } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    if (!isSignedIn) return
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
     const fetch = async () => {
       try {
         const res = await getUserOrders()
@@ -31,7 +36,17 @@ export default function OrdersPage() {
       } catch { } finally { setLoading(false) }
     }
     fetch()
-  }, [isSignedIn])
+  }, [isLoaded, isSignedIn])
+
+  if (!mounted || !isLoaded) {
+    return (
+      <AuthWrapper>
+        <div style={{ textAlign: 'center', padding: '160px 24px' }}>
+          <p style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
+        </div>
+      </AuthWrapper>
+    )
+  }
 
   if (!isSignedIn) {
     return <RedirectToSignIn />
