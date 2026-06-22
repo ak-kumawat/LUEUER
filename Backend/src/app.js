@@ -9,8 +9,12 @@ import apiRouter from './routes/index.js'
 
 const app = express()
 
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : 'http://localhost:3000'
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN,
+  origin: allowedOrigins,
   credentials: true
 }))
 
