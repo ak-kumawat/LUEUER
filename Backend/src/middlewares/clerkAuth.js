@@ -1,4 +1,5 @@
 import { createClerkClient } from '@clerk/clerk-sdk-node'
+import prisma from '../db/index.js'
 
 let clerkClient
 
@@ -39,7 +40,28 @@ const clerkAuth = async (req, res, next) => {
       return next()
     }
 
-    const user = await client.users.getUser(requestState.toAuth().userId)
+    const clerkId = requestState.toAuth().userId
+    const user = await client.users.getUser(clerkId)
+
+    // Self-healing: Ensure user exists in local database
+    let dbUser = await prisma.user.findUnique({ where: { clerkId } })
+    if (!dbUser) {
+      try {
+        const emailAddress = user.emailAddresses?.[0]?.emailAddress
+        await prisma.user.create({
+          data: {
+            clerkId,
+            email: emailAddress || '',
+            firstName: user.firstName || '',
+            lastName: user.lastName || '',
+            isActive: true
+          }
+        })
+        console.log(`Auto-synced user ${clerkId} to database.`)
+      } catch (dbErr) {
+        console.error("Failed to auto-sync user to database:", dbErr)
+      }
+    }
 
     req.user = user
     req.isAdmin = user.publicMetadata?.role === 'admin'
