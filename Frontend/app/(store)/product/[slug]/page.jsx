@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AuthWrapper from '../../../components/shared/AuthWrapper'
 import Footer from '../../../components/store/Footer'
 import SizeChart from '../../../components/store/SizeChart'
@@ -8,6 +8,7 @@ import { useCart } from '../../../components/shared/CartContext'
 import { getProductBySlug, getRatingsByProduct } from '../../../../lib/api'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import gsap from 'gsap'
 
 export default function ProductDetailPage({ params }) {
   const slug = params.slug
@@ -18,6 +19,9 @@ export default function ProductDetailPage({ params }) {
   const [rating, setRating] = useState(null)
   const [selectedImage, setSelectedImage] = useState(0)
   const [loading, setLoading] = useState(true)
+
+  const galleryRef = useRef(null)
+  const detailsRef = useRef(null)
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -36,6 +40,28 @@ export default function ProductDetailPage({ params }) {
     }
     fetchProduct()
   }, [slug])
+
+  useEffect(() => {
+    if (loading || !product) return
+
+    const ctx = gsap.context(() => {
+      if (galleryRef.current) {
+        gsap.fromTo(galleryRef.current,
+          { opacity: 0, x: -20 },
+          { opacity: 1, x: 0, duration: 0.6, ease: 'power2.out' }
+        )
+      }
+
+      if (detailsRef.current) {
+        gsap.fromTo(detailsRef.current,
+          { opacity: 0, y: 20 },
+          { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', delay: 0.08 }
+        )
+      }
+    })
+
+    return () => ctx.revert()
+  }, [loading, product])
 
   if (loading) {
     return (
@@ -131,7 +157,7 @@ export default function ProductDetailPage({ params }) {
           }}>
             
             {/* Images Well */}
-            <div>
+            <div ref={galleryRef} style={{ opacity: 0 }}>
               <div style={{
                 aspectRatio: '3/4',
                 overflow: 'hidden',
@@ -173,7 +199,7 @@ export default function ProductDetailPage({ params }) {
             </div>
 
             {/* Content Details */}
-            <div style={{ position: 'sticky', top: '100px' }}>
+            <div ref={detailsRef} style={{ position: 'sticky', top: '100px', opacity: 0 }}>
               <p className="section-label" style={{ marginBottom: '12px', color: 'var(--color-accent)' }}>
                 {product.tagline || 'LURUER CLOTHING'}
               </p>
