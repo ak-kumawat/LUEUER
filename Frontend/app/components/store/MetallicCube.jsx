@@ -14,19 +14,106 @@ function CubeGroup() {
   // Spacing coordinate offset
   const spacing = 1.04
 
+  // --- PROCEDURAL TEXTURES (Generated in-memory via Canvas) ---
+  
+  // 1. Brushed Silver Texture
+  const brushedTexture = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 256
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#888888'
+    ctx.fillRect(0, 0, 256, 256)
+    
+    ctx.strokeStyle = '#aaaaaa'
+    ctx.lineWidth = 1
+    for (let i = 0; i < 400; i++) {
+      const y = Math.random() * 256
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(256, y)
+      ctx.stroke()
+    }
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    return tex
+  }, [])
+
+  // 2. Perforated Grid Texture (Dot Mesh)
+  const dotGridTexture = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const canvas = document.createElement('canvas')
+    canvas.width = 128
+    canvas.height = 128
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, 128, 128)
+    
+    ctx.fillStyle = '#000000'
+    const size = 8
+    for (let x = 4; x < 128; x += size) {
+      for (let y = 4; y < 128; y += size) {
+        ctx.beginPath()
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(2, 2)
+    return tex
+  }, [])
+
+  // 3. Carbon Fiber Checker Pattern
+  const carbonTexture = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#222222'
+    ctx.fillRect(0, 0, 64, 64)
+    
+    ctx.fillStyle = '#111111'
+    for (let x = 0; x < 64; x += 8) {
+      for (let y = 0; y < 64; y += 8) {
+        if ((x + y) % 16 === 0) {
+          ctx.fillRect(x, y, 8, 8)
+        }
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(3, 3)
+    return tex
+  }, [])
+
   // Initialize block descriptors (only once)
-  // We keep an array of 27 blocks, each having a unique ID, a THREE.Vector3 position, and a THREE.Quaternion orientation
+  // We keep an array of 27 blocks, each having a unique ID, position, orientation, and a material type finish
   const blocks = useMemo(() => {
     const list = []
     const offsets = [-spacing, 0, spacing]
     let id = 0
+    
+    // Stable material types
+    const materialTypes = ['brushed', 'perforated', 'carbon', 'matte', 'gloss']
+
     offsets.forEach(x => {
       offsets.forEach(y => {
         offsets.forEach(z => {
+          // Use coordinate coordinates stable hash to select a material finish
+          const hash = Math.abs(Math.sin(id + 1)) * 10
+          const matType = materialTypes[Math.floor(hash) % materialTypes.length]
+
           list.push({
             id: id++,
             pos: new THREE.Vector3(x, y, z),
-            rot: new THREE.Quaternion()
+            rot: new THREE.Quaternion(),
+            matType
           })
         })
       })
@@ -99,7 +186,6 @@ function CubeGroup() {
         if (!mesh) return
 
         // Check if block is in the twisting layer
-        // We use a small epsilon tolerance (0.05) because of float rounding
         const coord = block.pos[tw.axis]
         const isInLayer = Math.abs(coord - tw.layerIndex) < 0.05
 
@@ -135,7 +221,7 @@ function CubeGroup() {
             block.pos.y = Math.round(block.pos.y / spacing) * spacing
             block.pos.z = Math.round(block.pos.z / spacing) * spacing
 
-            // Apply orientation quaternion update (premultiply world-axis rotation)
+            // Apply orientation quaternion update
             block.rot.premultiply(snapRotation).normalize()
           }
         })
@@ -182,43 +268,82 @@ function CubeGroup() {
     <group ref={tiltRef}>
       {/* Inner rotation group for continuous spinning and wobbling */}
       <group ref={rotateRef}>
-        {blocks.map((block, idx) => (
-          <group
-            key={block.id}
-            ref={el => { blocksRef.current[idx] = el }}
-          >
-            <RoundedBox
-              args={[1, 1, 1]} // dimensions: width, height, depth
-              radius={0.07}    // smooth, beveled edges
-              smoothness={4}   // subdivision segments
+        {blocks.map((block, idx) => {
+          let material;
+          switch (block.matType) {
+            case 'brushed':
+              material = (
+                <meshPhysicalMaterial
+                  color="#a8a8a8"
+                  metalness={1.0}
+                  roughness={0.35}
+                  bumpMap={brushedTexture}
+                  bumpScale={0.015}
+                  clearcoat={0.3}
+                  clearcoatRoughness={0.2}
+                />
+              )
+              break
+            case 'perforated':
+              material = (
+                <meshPhysicalMaterial
+                  color="#1a1a1a"
+                  metalness={0.8}
+                  roughness={0.25}
+                  bumpMap={dotGridTexture}
+                  bumpScale={-0.03}
+                />
+              )
+              break
+            case 'carbon':
+              material = (
+                <meshPhysicalMaterial
+                  color="#151515"
+                  metalness={0.85}
+                  roughness={0.35}
+                  bumpMap={carbonTexture}
+                  bumpScale={0.01}
+                />
+              )
+              break
+            case 'matte':
+              material = (
+                <meshPhysicalMaterial
+                  color="#121212"
+                  metalness={0.2}
+                  roughness={0.75}
+                />
+              )
+              break
+            case 'gloss':
+            default:
+              material = (
+                <meshPhysicalMaterial
+                  color="#080808"
+                  metalness={0.95}
+                  roughness={0.05}
+                  clearcoat={1.0}
+                  clearcoatRoughness={0.02}
+                />
+              )
+              break
+          }
+
+          return (
+            <group
+              key={block.id}
+              ref={el => { blocksRef.current[idx] = el }}
             >
-              <meshPhysicalMaterial
-                color="#ffffff"
-                transparent={true}
-                opacity={0.03}              // Face color: rgba(255, 255, 255, 0.03)
-                emissive="#c8c8c8"
-                emissiveIntensity={0.4}     // Glow/emissive: rgba(200, 200, 200, 0.4)
-                metalness={0.9}
-                roughness={0.15}
-                clearcoat={1.0}
-                clearcoatRoughness={0.05}
-                transmission={0.9}          // glass transparency effect
-                thickness={0.5}
-              />
-            </RoundedBox>
-            <lineSegments>
-              <edgesGeometry attach="geometry" args={[new THREE.BoxGeometry(1.002, 1.002, 1.002)]} />
-              <lineBasicMaterial
-                attach="material"
-                color="#c0c0c0"             // Edge color: rgba(192, 192, 192)
-                transparent={true}
-                opacity={0.6}               // Edge alpha: 0.6
-                linewidth={1}
-                depthWrite={false}
-              />
-            </lineSegments>
-          </group>
-        ))}
+              <RoundedBox
+                args={[1, 1, 1]} // dimensions: width, height, depth
+                radius={0.07}    // smooth, beveled edges
+                smoothness={4}   // subdivision segments
+              >
+                {material}
+              </RoundedBox>
+            </group>
+          )
+        })}
       </group>
     </group>
   )
@@ -228,10 +353,9 @@ export default function MetallicCube() {
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Canvas
-        orthographic
         camera={{
-          position: [5, 5, 5],
-          zoom: 70,
+          position: [5.2, 5.2, 5.2], // Perspective viewpoint down the cube's diagonal
+          fov: 38,                   // Field of view
           near: 0.1,
           far: 1000
         }}
