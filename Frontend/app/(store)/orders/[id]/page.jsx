@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import AuthWrapper from '../../../components/shared/AuthWrapper'
 import Footer from '../../../components/store/Footer'
 import { getOrderById, cancelOrder } from '../../../../lib/api'
@@ -16,8 +16,7 @@ const statusColors = {
 }
 
 export default function OrderDetailPage({ params }) {
-  const unwrappedParams = use(params)
-  const id = unwrappedParams.id
+  const id = params.id
 
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)

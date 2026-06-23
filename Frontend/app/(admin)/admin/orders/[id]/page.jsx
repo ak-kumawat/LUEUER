@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { getOrderById, adminUpdateOrderStatus, createShipment, cancelShipment, adminMarkAsRefunded } from '../../../../../lib/api'
 
 const STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned']
@@ -158,8 +158,7 @@ function ShiprocketSection({ order, onUpdate }) {
 }
 
 export default function AdminOrderDetailPage({ params }) {
-  const unwrappedParams = use(params)
-  const id = unwrappedParams.id
+  const id = params.id
 
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
