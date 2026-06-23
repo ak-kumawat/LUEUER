@@ -133,7 +133,7 @@ export default function Navbar() {
           <Link href="/" className="site-nav-brand">
             <img src={brandImages.logo} alt="LURUER" className="site-nav-logo" />
             <div className="site-nav-brand-text">
-              <span className="site-nav-name">LURUER</span>
+              <span className="site-nav-name">LUEUER</span>
               <span className="site-nav-tagline">LUXURY ESSENTIALS</span>
             </div>
           </Link>
