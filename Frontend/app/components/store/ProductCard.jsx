@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { useCart } from '../shared/CartContext'
-import { getWishlist, addToWishlist, removeFromWishlist } from '../../../lib/api'
+import { getWishlist, addToWishlist, removeFromWishlist, setTokenFetcher, setAuthToken } from '../../../lib/api'
 
 // Import Swiper React components and modules
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -20,7 +20,7 @@ export default function ProductCard({ product, onClick, light = false }) {
   const [hovered, setHovered] = useState(false)
   const [activeImgIndex, setActiveImgIndex] = useState(0)
   const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart()
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, getToken } = useAuth()
   const clerk = useClerk()
   const router = useRouter()
 
@@ -91,6 +91,10 @@ export default function ProductCard({ product, onClick, light = false }) {
     if (!isSignedIn) return
     const checkWishlist = async () => {
       try {
+        setTokenFetcher(getToken)
+        const token = await getToken()
+        setAuthToken(token)
+
         const res = await getWishlist()
         const items = res.data?.data || []
         const found = items.find(item => item.productId === product.id)
@@ -110,34 +114,21 @@ export default function ProductCard({ product, onClick, light = false }) {
       return
     }
 
-    if (clickTimeoutRef.current) {
-      // Double click: remove from wishlist and turn back to outline
-      clearTimeout(clickTimeoutRef.current)
-      clickTimeoutRef.current = null
-      
-      try {
-        if (isWishlisted && wishlistId) {
-          setIsWishlisted(false)
-          const currentWishlistId = wishlistId
-          setWishlistId(null)
+    try {
+      if (isWishlisted) {
+        setIsWishlisted(false)
+        const currentWishlistId = wishlistId
+        setWishlistId(null)
+        if (currentWishlistId) {
           await removeFromWishlist(currentWishlistId)
         }
-      } catch (err) {}
-    } else {
-      // Single click: wait to see if it's a double click, then add to wishlist
-      clickTimeoutRef.current = setTimeout(async () => {
-        clickTimeoutRef.current = null
-        
-        try {
-          if (!isWishlisted) {
-            setIsWishlisted(true)
-            const res = await addToWishlist({ productId: product.id })
-            setWishlistId(res.data?.data?.id)
-          }
-        } catch (err) {
-          setIsWishlisted(false)
-        }
-      }, 250)
+      } else {
+        setIsWishlisted(true)
+        const res = await addToWishlist({ productId: product.id })
+        setWishlistId(res.data?.data?.id)
+      }
+    } catch (err) {
+      setIsWishlisted(!isWishlisted)
     }
   }
 

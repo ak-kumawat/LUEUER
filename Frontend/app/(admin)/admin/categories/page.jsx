@@ -7,6 +7,7 @@ export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingCategoryId, setEditingCategoryId] = useState(null)
   const [form, setForm] = useState({
     name: '', slug: '', type: 'cloth_type', description: '', displayOrder: 0, baseWeight: 0.2
   })
@@ -23,13 +24,34 @@ export default function AdminCategoriesPage() {
   const generateSlug = (name) =>
     name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').trim()
 
+  const handleEditCategory = (cat) => {
+    setForm({
+      name: cat.name || '',
+      slug: cat.slug || '',
+      type: cat.type || 'cloth_type',
+      description: cat.description || '',
+      displayOrder: cat.displayOrder || 0,
+      baseWeight: cat.baseWeight || 0.2
+    })
+    setEditingCategoryId(cat.id)
+    setShowForm(true)
+  }
+
   const handleSubmit = async () => {
     try {
-      await adminCreateCategory({
+      const payload = {
         ...form,
         slug: form.slug || generateSlug(form.name)
-      })
+      }
+
+      if (editingCategoryId) {
+        await adminUpdateCategory(editingCategoryId, payload)
+      } else {
+        await adminCreateCategory(payload)
+      }
+
       setForm({ name: '', slug: '', type: 'cloth_type', description: '', displayOrder: 0, baseWeight: 0.2 })
+      setEditingCategoryId(null)
       setShowForm(false)
       fetchCategories()
     } catch (err) {
@@ -62,7 +84,13 @@ export default function AdminCategoriesPage() {
         </div>
         <button
           className="admin-btn-primary"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showForm) {
+              setForm({ name: '', slug: '', type: 'cloth_type', description: '', displayOrder: 0, baseWeight: 0.2 })
+              setEditingCategoryId(null)
+            }
+            setShowForm(!showForm)
+          }}
         >
           {showForm ? 'Cancel' : 'Add Category'}
         </button>
@@ -76,6 +104,10 @@ export default function AdminCategoriesPage() {
           gap: '16px',
           maxWidth: '560px'
         }}>
+          <h3 style={{ marginBottom: '8px', fontFamily: 'var(--font-sans)', fontSize: '15px', fontWeight: 600, color: 'var(--admin-accent)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            {editingCategoryId ? 'Edit Category' : 'New Category'}
+          </h3>
+          
           <div className="admin-form-group" style={{ marginBottom: 0 }}>
             <label className="admin-form-label">Category Name</label>
             <input
@@ -130,7 +162,7 @@ export default function AdminCategoriesPage() {
             />
           </div>
           <button className="admin-btn-primary" onClick={handleSubmit} style={{ marginTop: '8px' }}>
-            Save Category
+            {editingCategoryId ? 'Update Category' : 'Save Category'}
           </button>
         </div>
       )}
@@ -162,7 +194,7 @@ export default function AdminCategoriesPage() {
                   {cat.type}
                 </span>
               </div>
-              <div style={{ flex: '0 0 100px', display: 'flex', justifyContent: 'center' }}>
+              <div style={{ flex: '0 0 180px', display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
                 <button
                   onClick={() => toggleActive(cat)}
                   className="admin-badge"
@@ -174,11 +206,18 @@ export default function AdminCategoriesPage() {
                     transition: 'all 0.2s ease',
                     textAlign: 'center',
                     justifyContent: 'center',
-                    width: '100%',
+                    flex: 1,
                     display: 'block'
                   }}
                 >
                   {cat.isActive ? 'Active' : 'Off'}
+                </button>
+                <button
+                  onClick={() => handleEditCategory(cat)}
+                  className="admin-btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '10px' }}
+                >
+                  Edit
                 </button>
               </div>
               <div style={{ flex: '0 0 40px', textAlign: 'right' }}>

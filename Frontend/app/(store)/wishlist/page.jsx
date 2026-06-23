@@ -5,11 +5,11 @@ import { useAuth } from '@clerk/nextjs'
 import AuthWrapper from '../../components/shared/AuthWrapper'
 import Footer from '../../components/store/Footer'
 import { useCart } from '../../components/shared/CartContext'
-import { getWishlist, removeFromWishlist } from '../../../lib/api'
+import { getWishlist, removeFromWishlist, setTokenFetcher, setAuthToken } from '../../../lib/api'
 import Link from 'next/link'
 
 export default function WishlistPage() {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, getToken } = useAuth()
   const { addToCart } = useCart()
   const [wishlist, setWishlist] = useState([])
   const [loading, setLoading] = useState(true)
@@ -18,12 +18,16 @@ export default function WishlistPage() {
     if (!isSignedIn) { setLoading(false); return }
     const fetch = async () => {
       try {
+        setTokenFetcher(getToken)
+        const token = await getToken()
+        setAuthToken(token)
+
         const res = await getWishlist()
         setWishlist(res.data?.data || [])
       } catch { } finally { setLoading(false) }
     }
     fetch()
-  }, [isSignedIn])
+  }, [isSignedIn, getToken])
 
   const handleRemove = async (id) => {
     try {

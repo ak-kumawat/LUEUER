@@ -68,7 +68,7 @@ export const uploadImage = (formData) => API.post('/upload/image', formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 })
 
-export const adminGetAllOrders = () => API.get('/orders/admin/all')
+export const adminGetAllOrders = (params) => API.get('/orders/admin/all', { params })
 export const adminUpdateOrderStatus = (id, data) => API.put(`/orders/admin/${id}/status`, data)
 export const adminCreateCategory = (data) => API.post('/categories', data)
 export const adminUpdateCategory = (id, data) => API.put(`/categories/${id}`, data)

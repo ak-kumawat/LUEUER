@@ -151,7 +151,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params
   const {
     name, slug, tagline, description, basePrice,
-    thumbnailUrl, isFeatured, defaultRating, isActive, variants
+    thumbnailUrl, isFeatured, defaultRating, isActive, variants,
+    categoryIds, imageUrls
   } = req.body
 
   const product = await prisma.product.findUnique({
@@ -160,6 +161,42 @@ export const updateProduct = asyncHandler(async (req, res) => {
   })
   if (!product) {
     throw new ApiError(404, "Product not found")
+  }
+
+  // Update categories if provided
+  if (categoryIds) {
+    // Delete all current categories
+    await prisma.productCategory.deleteMany({
+      where: { productId: id }
+    })
+    // Create new category connections
+    if (categoryIds.length > 0) {
+      await prisma.productCategory.createMany({
+        data: categoryIds.map(categoryId => ({
+          productId: id,
+          categoryId
+        }))
+      })
+    }
+  }
+
+  // Update images if provided
+  if (imageUrls) {
+    // Delete all current images
+    await prisma.productImage.deleteMany({
+      where: { productId: id }
+    })
+    // Create new ones
+    if (imageUrls.length > 0) {
+      await prisma.productImage.createMany({
+        data: imageUrls.map((url, idx) => ({
+          productId: id,
+          imageUrl: url,
+          isPrimary: idx === 0,
+          displayOrder: idx
+        }))
+      })
+    }
   }
 
   // Update variants if provided
@@ -210,6 +247,11 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
+  let finalThumbnailUrl = thumbnailUrl
+  if (finalThumbnailUrl === undefined && imageUrls) {
+    finalThumbnailUrl = imageUrls.length > 0 ? imageUrls[0] : null
+  }
+
   const updated = await prisma.product.update({
     where: { id },
     data: {
@@ -218,7 +260,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       tagline: tagline !== undefined ? tagline : product.tagline,
       description: description || product.description,
       basePrice: basePrice ? parseFloat(basePrice) : product.basePrice,
-      thumbnailUrl: thumbnailUrl !== undefined ? thumbnailUrl : product.thumbnailUrl,
+      thumbnailUrl: finalThumbnailUrl !== undefined ? finalThumbnailUrl : product.thumbnailUrl,
       isFeatured: isFeatured !== undefined ? isFeatured : product.isFeatured,
       defaultRating: defaultRating !== undefined ? parseFloat(defaultRating) : product.defaultRating,
       isActive: isActive !== undefined ? isActive : product.isActive

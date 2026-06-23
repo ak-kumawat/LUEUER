@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from '@clerk/nextjs'
-import { getCart, addToCart as apiAddToCart, updateCartItem as apiUpdateCartItem, removeFromCart as apiRemoveFromCart, clearCart as apiClearCart } from '../../../lib/api'
+import { getCart, addToCart as apiAddToCart, updateCartItem as apiUpdateCartItem, removeFromCart as apiRemoveFromCart, clearCart as apiClearCart, setTokenFetcher, setAuthToken } from '../../../lib/api'
 
 const CartContext = createContext(null)
 
@@ -10,7 +10,7 @@ export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([])
   const [syncing, setSyncing] = useState(false)
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false)
-  const { isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoaded, getToken } = useAuth()
 
   const mapBackendItem = (item) => ({
     id: item.id, // Database CartItem id
@@ -35,6 +35,10 @@ export const CartProvider = ({ children }) => {
       setSyncing(true)
       try {
         if (isSignedIn) {
+          setTokenFetcher(getToken)
+          const token = await getToken()
+          setAuthToken(token)
+
           // If we have items in localStorage (guest cart), merge them to the backend database
           const saved = localStorage.getItem('lueuer_cart')
           const guestItems = saved ? JSON.parse(saved) : []

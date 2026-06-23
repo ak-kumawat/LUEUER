@@ -8,6 +8,8 @@ export default function AdminProductsPage() {
   const [categories, setCategories] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [editingProductId, setEditingProductId] = useState(null)
+  const [editingVariantId, setEditingVariantId] = useState(null)
 
   // New advanced form states
   const [form, setForm] = useState({ 
@@ -23,6 +25,28 @@ export default function AdminProductsPage() {
   const [color, setColor] = useState('Carbon Black')
   const [colorHex, setColorHex] = useState('#121212')
   const [stockQuantity, setStockQuantity] = useState(0)
+
+  const handleEditProduct = (p) => {
+    const firstVariant = p.variants?.[0]
+    setForm({
+      name: p.name || '',
+      slug: p.slug || '',
+      description: p.description || '',
+      basePrice: p.basePrice || 0,
+      sku: firstVariant?.sku || ''
+    })
+    setTagline(p.tagline || '')
+    setDefaultRating(p.defaultRating || 4.8)
+    setImagesList(p.images?.map(img => img.imageUrl) || [])
+    setSelectedCategoryIds(p.categories?.map(c => c.categoryId || c.category?.id) || [])
+    setSize(firstVariant?.size || 'M')
+    setColor(firstVariant?.color || 'Carbon Black')
+    setColorHex(firstVariant?.colorHex || '#121212')
+    setStockQuantity(firstVariant?.stockQuantity || 0)
+    setEditingProductId(p.id)
+    setEditingVariantId(firstVariant?.id || null)
+    setShowForm(true)
+  }
 
   useEffect(() => {
     fetchProducts()
@@ -110,6 +134,7 @@ export default function AdminProductsPage() {
       defaultRating: parseFloat(defaultRating) || 4.8,
       categoryIds: selectedCategoryIds,
       variants: [{
+        id: editingVariantId || undefined,
         size,
         color: color || "Carbon Black",
         colorHex: colorHex || "#121212",
@@ -120,7 +145,11 @@ export default function AdminProductsPage() {
     }
 
     try {
-      await adminCreateProduct(payload)
+      if (editingProductId) {
+        await adminUpdateProduct(editingProductId, payload)
+      } else {
+        await adminCreateProduct(payload)
+      }
       setShowForm(false)
       fetchProducts()
       
@@ -134,8 +163,10 @@ export default function AdminProductsPage() {
       setColor('Carbon Black')
       setColorHex('#121212')
       setStockQuantity(0)
+      setEditingProductId(null)
+      setEditingVariantId(null)
     } catch (err) {
-      alert(err?.response?.data?.message || "Failed to add product")
+      alert(err?.response?.data?.message || "Failed to save product")
     }
   }
 
@@ -146,14 +177,31 @@ export default function AdminProductsPage() {
           <h1 className="admin-page-title">Products</h1>
           <p className="admin-page-subtitle">Manage LUEUER inventory items, variants, and media.</p>
         </div>
-        <button className="admin-btn-primary" onClick={() => setShowForm(!showForm)}>
+        <button className="admin-btn-primary" onClick={() => {
+          if (showForm) {
+            setForm({ name: '', slug: '', description: '', basePrice: 0, sku: '' })
+            setTagline('')
+            setDefaultRating(4.8)
+            setImagesList([])
+            setSelectedCategoryIds([])
+            setSize('M')
+            setColor('Carbon Black')
+            setColorHex('#121212')
+            setStockQuantity(0)
+            setEditingProductId(null)
+            setEditingVariantId(null)
+          }
+          setShowForm(!showForm)
+        }}>
           {showForm ? 'Cancel' : '+ Add Product'}
         </button>
       </div>
 
       {showForm && (
         <div className="admin-card" style={{ marginBottom: '40px' }}>
-          <h3 style={{ marginBottom: '24px', fontFamily: 'var(--font-sans)', fontSize: '15px', fontWeight: 600, color: 'var(--admin-accent)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>New Product</h3>
+          <h3 style={{ marginBottom: '24px', fontFamily: 'var(--font-sans)', fontSize: '15px', fontWeight: 600, color: 'var(--admin-accent)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            {editingProductId ? 'Edit Product' : 'New Product'}
+          </h3>
           
           <div className="admin-form-group">
             <label className="admin-form-label">Product Name</label>
@@ -331,7 +379,7 @@ export default function AdminProductsPage() {
           </div>
 
           <button className="admin-btn-primary" onClick={handleSubmit} disabled={uploading}>
-            {uploading ? 'Uploading Images...' : 'Save Product'}
+            {uploading ? 'Uploading Images...' : (editingProductId ? 'Update Product' : 'Save Product')}
           </button>
         </div>
       )}
@@ -409,6 +457,13 @@ export default function AdminProductsPage() {
                     style={{ padding: '6px 12px', fontSize: '10px', marginRight: '8px' }}
                   >
                     {p.isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    onClick={() => handleEditProduct(p)}
+                    className="admin-btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '10px', marginRight: '8px' }}
+                  >
+                    Edit
                   </button>
                   <button
                     onClick={() => handleDeleteProduct(p.id)}
