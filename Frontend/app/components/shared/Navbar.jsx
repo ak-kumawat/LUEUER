@@ -5,6 +5,7 @@ import { SignInButton, UserButton, useAuth, useUser } from '@clerk/nextjs'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCart } from './CartContext'
+import { useWishlist } from './WishlistContext'
 import { brandImages } from '../../../lib/images'
 
 // SVG Icons for Navigation
@@ -82,7 +83,7 @@ const centerLinks = [
 ]
 
 const rightLinks = [
-  { href: '/wishlist', label: 'Wishlist' },
+  { href: '/wishlist', label: 'Wishlist', showBadge: true },
   { href: '/cart', label: 'Cart', showBadge: true },
 ]
 
@@ -90,6 +91,7 @@ export default function Navbar() {
   const { isSignedIn } = useAuth()
   const { user } = useUser()
   const { itemCount } = useCart()
+  const { wishlistCount } = useWishlist()
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -162,8 +164,10 @@ export default function Navbar() {
                 title={item.label}
               >
                 {getLinkIcon(item.label)}
-                {item.showBadge && itemCount > 0 && (
-                  <span className="nav-cart-badge">{itemCount}</span>
+                {item.showBadge && (
+                  item.label === 'Cart' 
+                    ? (itemCount > 0 && <span className="nav-cart-badge">{itemCount}</span>)
+                    : (wishlistCount > 0 && <span className="nav-cart-badge">{wishlistCount}</span>)
                 )}
               </Link>
             ))}
@@ -190,6 +194,10 @@ export default function Navbar() {
 
           {/* Mobile — cart + hamburger */}
           <div className="site-nav-mobile-actions">
+            <Link href="/wishlist" className="site-nav-cart-mobile" title="Wishlist" style={{ marginRight: '12px' }}>
+              {getLinkIcon('Wishlist')}
+              {wishlistCount > 0 && <span className="nav-cart-badge">{wishlistCount}</span>}
+            </Link>
             <Link href="/cart" className="site-nav-cart-mobile" title="Cart">
               {getLinkIcon('Cart')}
               {itemCount > 0 && <span className="nav-cart-badge">{itemCount}</span>}
@@ -234,8 +242,10 @@ export default function Navbar() {
               {getLinkIcon(item.label)}
               <span>{item.label}</span>
             </span>
-            {item.showBadge && itemCount > 0 && (
-              <span className="nav-cart-badge">{itemCount}</span>
+            {item.showBadge && (
+              item.label === 'Cart' 
+                ? (itemCount > 0 && <span className="nav-cart-badge">{itemCount}</span>)
+                : (wishlistCount > 0 && <span className="nav-cart-badge">{wishlistCount}</span>)
             )}
           </Link>
         ))}

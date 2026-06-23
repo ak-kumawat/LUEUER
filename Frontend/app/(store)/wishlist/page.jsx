@@ -1,39 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import AuthWrapper from '../../components/shared/AuthWrapper'
 import Footer from '../../components/store/Footer'
 import { useCart } from '../../components/shared/CartContext'
-import { getWishlist, removeFromWishlist, setTokenFetcher, setAuthToken } from '../../../lib/api'
+import { useWishlist } from '../../components/shared/WishlistContext'
 import Link from 'next/link'
 
 export default function WishlistPage() {
-  const { isSignedIn, getToken } = useAuth()
+  const { isSignedIn } = useAuth()
   const { addToCart } = useCart()
-  const [wishlist, setWishlist] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { wishlistItems, toggleWishlist, syncing: loading } = useWishlist()
 
-  useEffect(() => {
-    if (!isSignedIn) { setLoading(false); return }
-    const fetch = async () => {
-      try {
-        setTokenFetcher(getToken)
-        const token = await getToken()
-        setAuthToken(token)
-
-        const res = await getWishlist()
-        setWishlist(res.data?.data || [])
-      } catch { } finally { setLoading(false) }
+  const handleRemove = (item) => {
+    if (item?.product) {
+      toggleWishlist(item.product)
     }
-    fetch()
-  }, [isSignedIn, getToken])
-
-  const handleRemove = async (id) => {
-    try {
-      await removeFromWishlist(id)
-      setWishlist(prev => prev.filter(item => item.id !== id))
-    } catch { }
   }
 
   return (
@@ -60,7 +42,7 @@ export default function WishlistPage() {
             </div>
           ) : loading ? (
             <p style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
-          ) : wishlist.length === 0 ? (
+          ) : wishlistItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px' }}>
               <p style={{
                 fontFamily: 'var(--font-serif)',
@@ -79,8 +61,9 @@ export default function WishlistPage() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '32px'
             }}>
-              {wishlist.map(item => {
+              {wishlistItems.map(item => {
                 const product = item.product
+                if (!product) return null
                 const image = product.images?.find(i => i.isPrimary)?.imageUrl
                   || product.thumbnailUrl
 
@@ -101,7 +84,7 @@ export default function WishlistPage() {
                         />
                       )}
                       <button
-                        onClick={() => handleRemove(item.id)}
+                        onClick={() => handleRemove(item)}
                         style={{
                           position: 'absolute',
                           top: '12px',

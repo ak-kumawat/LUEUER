@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { useCart } from '../shared/CartContext'
-import { getWishlist, addToWishlist, removeFromWishlist, setTokenFetcher, setAuthToken } from '../../../lib/api'
+import { useWishlist } from '../shared/WishlistContext'
 
 // Import Swiper React components and modules
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -20,13 +20,13 @@ export default function ProductCard({ product, onClick, light = false }) {
   const [hovered, setHovered] = useState(false)
   const [activeImgIndex, setActiveImgIndex] = useState(0)
   const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart()
+  const { isWishlisted: globalIsWishlisted, toggleWishlist } = useWishlist()
   const { isSignedIn, getToken } = useAuth()
   const clerk = useClerk()
   const router = useRouter()
 
   const [quantity, setQuantity] = useState(1)
-  const [isWishlisted, setIsWishlisted] = useState(false)
-  const [wishlistId, setWishlistId] = useState(null)
+  const isWish = globalIsWishlisted(product.id)
   const clickTimeoutRef = useRef(null)
 
   // Clear timeout on unmount
@@ -86,50 +86,13 @@ export default function ProductCard({ product, onClick, light = false }) {
     ? parseFloat(selectedVariant.priceOverride)
     : parseFloat(product.basePrice)
 
-  // Wishlist sync
-  useEffect(() => {
-    if (!isSignedIn) return
-    const checkWishlist = async () => {
-      try {
-        setTokenFetcher(getToken)
-        const token = await getToken()
-        setAuthToken(token)
-
-        const res = await getWishlist()
-        const items = res.data?.data || []
-        const found = items.find(item => item.productId === product.id)
-        if (found) {
-          setIsWishlisted(true)
-          setWishlistId(found.id)
-        }
-      } catch {}
-    }
-    checkWishlist()
-  }, [isSignedIn, product.id])
-
-  const handleWishlistClick = async (e) => {
+  const handleWishlistClick = (e) => {
     e.stopPropagation()
     if (!isSignedIn) {
       clerk.openSignIn()
       return
     }
-
-    try {
-      if (isWishlisted) {
-        setIsWishlisted(false)
-        const currentWishlistId = wishlistId
-        setWishlistId(null)
-        if (currentWishlistId) {
-          await removeFromWishlist(currentWishlistId)
-        }
-      } else {
-        setIsWishlisted(true)
-        const res = await addToWishlist({ productId: product.id })
-        setWishlistId(res.data?.data?.id)
-      }
-    } catch (err) {
-      setIsWishlisted(!isWishlisted)
-    }
+    toggleWishlist(product)
   }
 
   const handleAddToCartClick = (e) => {
@@ -216,12 +179,12 @@ export default function ProductCard({ product, onClick, light = false }) {
 
         {/* Wishlist Heart Button floating in top-right */}
         <button
-          className={`card-wishlist-float ${isWishlisted ? 'wishlisted' : ''}`}
+          className={`card-wishlist-float ${isWish ? 'wishlisted' : ''}`}
           onClick={handleWishlistClick}
           title="Wishlist"
           style={{ zIndex: 12 }}
         >
-          {isWishlisted ? '♥' : '♡'}
+          {isWish ? '♥' : '♡'}
         </button>
 
         {/* Image index indicator */}

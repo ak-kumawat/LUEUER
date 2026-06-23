@@ -1,6 +1,7 @@
 import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 import { CartProvider } from './components/shared/CartContext'
+import { WishlistProvider } from './components/shared/WishlistContext'
 
 export const metadata = {
   title: 'LUEUER — Built from Silence',
@@ -27,7 +28,9 @@ export default function RootLayout({ children }) {
       <html lang="en">
         <body>
           <CartProvider>
-            {children}
+            <WishlistProvider>
+              {children}
+            </WishlistProvider>
           </CartProvider>
         </body>
       </html>
