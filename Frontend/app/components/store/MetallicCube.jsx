@@ -193,13 +193,30 @@ function CubeGroup() {
               smoothness={4}   // subdivision segments
             >
               <meshPhysicalMaterial
-                color="#2a2a2a"
+                color="#ffffff"
+                transparent={true}
+                opacity={0.03}              // Face color: rgba(255, 255, 255, 0.03)
+                emissive="#c8c8c8"
+                emissiveIntensity={0.4}     // Glow/emissive: rgba(200, 200, 200, 0.4)
                 metalness={0.9}
                 roughness={0.15}
                 clearcoat={1.0}
                 clearcoatRoughness={0.05}
+                transmission={0.9}          // glass transparency effect
+                thickness={0.5}
               />
             </RoundedBox>
+            <lineSegments>
+              <edgesGeometry attach="geometry" args={[new THREE.BoxGeometry(1.002, 1.002, 1.002)]} />
+              <lineBasicMaterial
+                attach="material"
+                color="#c0c0c0"             // Edge color: rgba(192, 192, 192)
+                transparent={true}
+                opacity={0.6}               // Edge alpha: 0.6
+                linewidth={1}
+                depthWrite={false}
+              />
+            </lineSegments>
           </group>
         ))}
       </group>
