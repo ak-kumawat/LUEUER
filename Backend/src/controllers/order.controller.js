@@ -228,6 +228,8 @@ export const placeOrder = asyncHandler(async (req, res) => {
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } })
 
     return newOrder
+  }, {
+    timeout: 15000 // 15 seconds to prevent timeout on slow database connections
   })
 
   // Send confirmation email asynchronously
