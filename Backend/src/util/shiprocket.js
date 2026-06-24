@@ -71,6 +71,16 @@ export const createShiprocketOrder = async (order) => {
       billing_phone: order.user.phone || '9999999999',
 
       shipping_is_billing: true,
+      shipping_customer_name: order.user.firstName,
+      shipping_last_name: order.user.lastName || '',
+      shipping_address: order.shippingAddress.street,
+      shipping_address_2: "",
+      shipping_city: order.shippingAddress.city,
+      shipping_pincode: order.shippingAddress.postalCode,
+      shipping_state: order.shippingAddress.state,
+      shipping_country: "India",
+      shipping_email: order.user.email,
+      shipping_phone: order.user.phone || '9999999999',
 
       order_items: order.items.map(item => ({
         name: item.variant.product.name,
