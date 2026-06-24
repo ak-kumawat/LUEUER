@@ -51,6 +51,16 @@ export const createRazorpayOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Cart is empty")
   }
 
+  // Verify stock levels before initiating payment order
+  for (const item of cart.items) {
+    if (item.quantity > item.variant.stockQuantity) {
+      throw new ApiError(
+        400,
+        `Insufficient stock for ${item.variant.product.name} (${item.variant.size}). Available: ${item.variant.stockQuantity}`
+      )
+    }
+  }
+
   const address = await prisma.address.findFirst({
     where: { id: shippingAddressId, userId: dbUser.id }
   })
@@ -171,44 +181,54 @@ export const placeOrder = asyncHandler(async (req, res) => {
   const totalAmount = subtotal + shippingFee
   const orderNumber = await generateOrderNumber()
 
-  const order = await prisma.order.create({
-    data: {
-      userId: dbUser.id,
-      shippingAddressId,
-      orderNumber,
-      subtotal,
-      shippingFee,
-      totalAmount,
-      paymentMethod: normalizedMethod,
-      paymentStatus: razorpayPaymentId ? 'paid' : 'unpaid',
-      razorpayOrderId: razorpayOrderId || null,
-      razorpayPaymentId: razorpayPaymentId || null,
-      notes: notes || null,
-      items: { create: orderItems },
-      statusHistory: {
-        create: { status: 'pending', note: 'Order placed' }
-      }
-    },
-    include: {
-      items: { include: { variant: { include: { product: true } } } },
-      shippingAddress: true,
-      statusHistory: true
-    }
-  })
-
-  // Decrement stock for variants in the order
-  for (const item of cart.items) {
-    await prisma.productVariant.update({
-      where: { id: item.variantId },
-      data: {
-        stockQuantity: {
-          decrement: item.quantity
+  const order = await prisma.$transaction(async (tx) => {
+    // 1. Atomically check and decrement stock for each item
+    for (const item of cart.items) {
+      const updateRes = await tx.productVariant.updateMany({
+        where: {
+          id: item.variantId,
+          stockQuantity: { gte: item.quantity }
+        },
+        data: {
+          stockQuantity: { decrement: item.quantity }
         }
+      })
+      if (updateRes.count === 0) {
+        throw new ApiError(400, `Insufficient stock for product ${item.variant.product.name} (${item.variant.size})`)
+      }
+    }
+
+    // 2. Create the order
+    const newOrder = await tx.order.create({
+      data: {
+        userId: dbUser.id,
+        shippingAddressId,
+        orderNumber,
+        subtotal,
+        shippingFee,
+        totalAmount,
+        paymentMethod: normalizedMethod,
+        paymentStatus: razorpayPaymentId ? 'paid' : 'unpaid',
+        razorpayOrderId: razorpayOrderId || null,
+        razorpayPaymentId: razorpayPaymentId || null,
+        notes: notes || null,
+        items: { create: orderItems },
+        statusHistory: {
+          create: { status: 'pending', note: 'Order placed' }
+        }
+      },
+      include: {
+        items: { include: { variant: { include: { product: true } } } },
+        shippingAddress: true,
+        statusHistory: true
       }
     })
-  }
 
-  await prisma.cartItem.deleteMany({ where: { cartId: cart.id } })
+    // 3. Clear cart items
+    await tx.cartItem.deleteMany({ where: { cartId: cart.id } })
+
+    return newOrder
+  })
 
   // Send confirmation email asynchronously
   sendOrderConfirmationEmail(order, dbUser.email).catch(err => {

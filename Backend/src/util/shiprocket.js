@@ -8,18 +8,30 @@ const isShiprocketConfigured = () => {
          !process.env.SHIPROCKET_EMAIL.includes('your@email.com')
 }
 
-// Get fresh token (expires every 24 hours)
+let cachedToken = null
+let tokenFetchedAt = null
+const TOKEN_TTL = 12 * 60 * 60 * 1000 // Cache for 12 hours
+
+// Get fresh token (expires every 24 hours, cached in-memory)
 export const getShiprocketToken = async () => {
   if (!isShiprocketConfigured()) {
     console.log('[Shiprocket Mock] API credentials not configured. Returning mock token.')
     return 'mock_token_12345'
   }
+
+  const now = Date.now()
+  if (cachedToken && tokenFetchedAt && (now - tokenFetchedAt < TOKEN_TTL)) {
+    return cachedToken
+  }
+
   try {
     const res = await axios.post(`${SHIPROCKET_URL}/auth/login`, {
       email: process.env.SHIPROCKET_EMAIL,
       password: process.env.SHIPROCKET_PASSWORD
     })
-    return res.data.token
+    cachedToken = res.data.token
+    tokenFetchedAt = now
+    return cachedToken
   } catch (error) {
     console.error('[Shiprocket Error] Auth login failed. Returning mock token for testing.', error.response?.data || error.message)
     return 'mock_token_fallback'
