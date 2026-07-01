@@ -1,29 +1,61 @@
 'use client'
 
 import Link from 'next/link'
-import { UserButton, useAuth } from '@clerk/nextjs'
+import { UserButton, useAuth, useUser } from '@clerk/nextjs'
 import { useEffect, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { setAuthToken, setTokenFetcher } from '../../lib/api'
 
 export default function AdminLayout({ children }) {
-  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth()
+  const { user, isLoaded: isUserLoaded } = useUser()
+  const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isAuthorized, setIsAuthorized] = useState(false)
   
   useEffect(() => {
     const fetchToken = async () => {
-      if (isLoaded && isSignedIn) {
+      if (isAuthLoaded && isSignedIn) {
         const token = await getToken()
         setAuthToken(token)
         setTokenFetcher(getToken)
-      } else if (isLoaded && !isSignedIn) {
+      } else if (isAuthLoaded && !isSignedIn) {
         setAuthToken(null)
         setTokenFetcher(null)
       }
     }
     fetchToken()
-  }, [isLoaded, isSignedIn, getToken])
+  }, [isAuthLoaded, isSignedIn, getToken])
+
+  useEffect(() => {
+    if (isAuthLoaded && isUserLoaded) {
+      if (isSignedIn && user?.publicMetadata?.role === 'admin') {
+        setIsAuthorized(true)
+      } else {
+        router.push('/')
+      }
+    }
+  }, [isAuthLoaded, isUserLoaded, isSignedIn, user, router])
+
+  if (!isAuthLoaded || !isUserLoaded || !isAuthorized) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh', 
+        background: '#0a0a0a', 
+        color: '#fff',
+        fontFamily: 'sans-serif',
+        fontSize: '16px',
+        letterSpacing: '0.05em'
+      }}>
+        <div>Verifying Admin Privileges...</div>
+      </div>
+    )
+  }
+
 
   const isActive = (path) => pathname === path
 
